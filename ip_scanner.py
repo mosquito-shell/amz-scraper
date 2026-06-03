@@ -1,17 +1,25 @@
 """
 Cloudflare 可用 IP 自动扫描 + 验证系统
-集成 5 个开源 IP 源，定时扫描 → 验证 → 输出 proxyIP.txt
+集成 9 个开源 IP 源，定时扫描 → 验证 → 累加输出 proxyIP.txt
 """
-import httpx
-import urllib3
 import re
 import time
 import json
 import os
-import subprocess
+import ssl
 from datetime import datetime
 
-urllib3.disable_warnings()
+# 优先用 requests，兼容性更好；fallback httpx
+try:
+    import requests as _http
+    _HTTP_BACKEND = 'requests'
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+except ImportError:
+    import httpx
+    _HTTP_BACKEND = 'httpx'
+    import urllib3
+    urllib3.disable_warnings()
 
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "proxyIP.txt")
 CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "proxyIP_cache.json")
@@ -76,10 +84,15 @@ TEST_URLS = [
 def fetch_url(url, timeout=15):
     """抓取 URL 内容"""
     try:
-        with httpx.Client(verify=False, timeout=timeout, follow_redirects=True) as client:
-            resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
-            if resp.status_code == 200 and len(resp.text) > 100:
+        if _HTTP_BACKEND == 'requests':
+            resp = _http.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout, verify=False)
+            if resp.status_code == 200 and len(resp.text) > 50:
                 return resp.text
+        else:
+            with httpx.Client(verify=False, timeout=timeout, follow_redirects=True) as client:
+                resp = client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                if resp.status_code == 200 and len(resp.text) > 50:
+                    return resp.text
     except:
         pass
     return None
