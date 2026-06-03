@@ -16,11 +16,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Debug env
+        run: |
+          python3 --version
+          pip --version
+          ls -la
+          echo "---"
+
       - name: Install deps
         run: pip install requests urllib3
 
       - name: Scan IPs
-        run: python3 ip_scanner.py --full --max 80
+        run: python3 ip_scanner.py --full --max 80 2>&1
+        continue-on-error: true
+
+      - name: Fallback quick scan
+        if: failure()
+        run: python3 ip_scanner.py --show 2>&1 || echo "No cache yet"
 
       - name: Commit
         run: |
