@@ -272,24 +272,25 @@ input[type=text]:focus,input[type=url]:focus,input[type=number]:focus,select:foc
       </div>
     </div>
 
-    <!-- ====== Settings ====== -->
+    <!-- ====== Settings: per-category weights ====== -->
     <div class="page" id="page-settings">
       <div class="chart-row">
-        <!-- 权重面板 -->
         <div class="chart-box">
-          <h3>⚙️ 评分权重配置</h3>
-          <p style="font-size:11px;color:#888;margin-bottom:12px">拖动滑块调整各维度权重，总和必须 = 100%</p>
-          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>💲 价格</span><span id="wPriceLabel">20%</span></label><input type="range" id="wPrice" value="20" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
-          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>📊 需求 (BSR)</span><span id="wDemandLabel">25%</span></label><input type="range" id="wDemand" value="25" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
-          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>🏪 竞争 (评论数)</span><span id="wCompetitionLabel">20%</span></label><input type="range" id="wCompetition" value="20" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
-          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>®️ 品牌</span><span id="wBrandLabel">15%</span></label><input type="range" id="wBrand" value="15" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
-          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>🛡️ 安全</span><span id="wSafetyLabel">10%</span></label><input type="range" id="wSafety" value="10" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
-          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>⭐ 社交 (评分)</span><span id="wSocialLabel">10%</span></label><input type="range" id="wSocial" value="10" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          <h3>⚙️ 品类权重配置 <span style="font-size:10px;color:#888;font-weight:normal">切换品类查看/修改独立权重</span></h3>
+          <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap" id="catTabs"></div>
+          <div id="catSliderBox">
+            <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>💲 价格</span><span id="wPriceLabel">20%</span></label><input type="range" id="wPrice" value="20" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+            <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>📊 需求 (BSR)</span><span id="wDemandLabel">25%</span></label><input type="range" id="wDemand" value="25" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+            <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>🏪 竞争 (评论数)</span><span id="wCompetitionLabel">20%</span></label><input type="range" id="wCompetition" value="20" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+            <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>®️ 品牌</span><span id="wBrandLabel">15%</span></label><input type="range" id="wBrand" value="15" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+            <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>🛡️ 安全</span><span id="wSafetyLabel">10%</span></label><input type="range" id="wSafety" value="10" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+            <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>⭐ 社交 (评分)</span><span id="wSocialLabel">10%</span></label><input type="range" id="wSocial" value="10" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          </div>
           <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:2px solid #f0f0f0">
             <div style="font-size:18px;font-weight:700">总计: <span id="wTotal" style="font-size:22px">100%</span></div>
             <div style="display:flex;gap:6px">
               <button class="btn btn-sm" onclick="resetWeightsDefault()">↩ 默认</button>
-              <button class="btn btn-sm btn-primary" onclick="saveWeights()">💾 保存并应用</button>
+              <button class="btn btn-sm btn-primary" onclick="saveWeights()">💾 保存并推送</button>
             </div>
           </div>
         </div>

@@ -290,16 +290,19 @@ function tryWIPO(cleanBrand, callback) {
     .then(function(resp) { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.json(); })
     .then(function(data) {
       var hits = (data && data.hits) ? data.hits : [];
-      if (!hits.length) { callback({ registered: 0, source: 'wipo', total: 0 }); return; }
+      if (!hits.length) { callback({ registered: 0, source: 'wipo', total: 0, countries: [] }); return; }
       var bc = cleanBrand.replace(/\s+/g, '').toLowerCase();
+      var countries = [];
       for (var i = 0; i < hits.length; i++) {
         var mn = (hits[i].markName || hits[i].brandName || '').replace(/\s+/g, '').toLowerCase();
+        var c = hits[i].country || hits[i].designationCountry || '';
+        if (c && countries.indexOf(c) < 0) countries.push(c);
         if (mn.indexOf(bc) > -1 || bc.indexOf(mn) > -1) {
-          callback({ registered: 1, source: 'wipo', name: hits[i].markName || hits[i].brandName || '', total: hits.length });
+          callback({ registered: 1, source: 'wipo', name: hits[i].markName || hits[i].brandName || '', total: hits.length, countries: countries });
           return;
         }
       }
-      callback({ registered: 0, source: 'wipo', total: hits.length });
+      callback({ registered: 0, source: 'wipo', total: hits.length, countries: countries });
     })
     .catch(function(err) { callback({ registered: 0, source: 'error', error: err.message }); });
 }

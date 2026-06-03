@@ -234,6 +234,56 @@ async function handleRequest(request, env) {
       return cors(request, response);
     }
 
+    // ===== 多人合并训练 =====
+    if (path === '/api/merge-training' && method === 'POST') {
+      const body = await request.json();
+      // body: { products: [...], user: 'name', time: '...' }
+      // Store per-user selections, then merge
+      const userKey = 'selections_' + (body.user || 'unknown').replace(/[^a-zA-Z0-9]/g, '_');
+      const userSelections = await env.AMZ_DATA.get(userKey, 'json') || [];
+      const existingMap = {};
+      userSelections.forEach(function(s) { existingMap[s.asin] = s; });
+
+      let added = 0;
+      (body.products || []).forEach(function(p) {
+        if (!existingMap[p.asin]) { existingMap[p.asin] = p; added++; }
+      });
+
+      const merged = Object.values(existingMap);
+      await env.AMZ_DATA.put(userKey, JSON.stringify(merged.slice(-500)));
+
+      // Merge all users' selections
+      const allUsers = ['user_1', 'user_2', 'user_3', 'user_4', 'user_5', 'user_6', 'user_7', 'user_8', 'user_9', 'user_10'];
+      let allSelections = [];
+      for (const u of allUsers) {
+        const sel = await env.AMZ_DATA.get('selections_' + u, 'json') || [];
+        allSelections = allSelections.concat(sel);
+      }
+
+      response = json({
+        ok: true,
+        user: body.user || 'unknown',
+        userTotal: merged.length,
+        added: added,
+        allUsersTotal: allSelections.length
+      });
+      return cors(request, response);
+    }
+
+    if (path === '/api/merge-training' && method === 'GET') {
+      const allKeys = await env.AMZ_DATA.list({ prefix: 'selections_' });
+      let allSelections = [];
+      for (const key of allKeys.keys || []) {
+        const sel = await env.AMZ_DATA.get(key.name, 'json') || [];
+        const userProducts = [];
+        const seen = {};
+        sel.forEach(function(s) { if (!seen[s.asin]) { seen[s.asin] = true; userProducts.push(s); } });
+        if (userProducts.length) allSelections.push({ user: key.name.replace('selections_',''), count: userProducts.length, products: userProducts });
+      }
+      response = json({ users: allSelections, total: allSelections.reduce(function(s,u){return s+u.count;},0) });
+      return cors(request, response);
+    }
+
     // ===== Status / Health =====
     if (path === '/api/status' || path === '/') {
       const lastSync = await env.AMZ_DATA.get('last_sync') || 'never';

@@ -1279,28 +1279,26 @@ function resetWeightsDefault(){
   document.getElementById('wTotal').style.color = '#52c41a';
 }
 
-function saveWeights(){
-  var keys = ['price','demand','competition','brand','safety','social'];
-  var ids = ['wPrice','wDemand','wCompetition','wBrand','wSafety','wSocial'];
-  keys.forEach(function(k,i){WEIGHTS[k]=parseInt(document.getElementById(ids[i]).value)||0;});
-  var total = Object.values(WEIGHTS).reduce(function(a,b){return a+b},0);
-  if(total!==100){showToast('权重总和='+total+'%，必须=100%');return;}
-  // 保存权重
-  localStorage.setItem('amz_weights',JSON.stringify(WEIGHTS));
-  // 保存历史版本
-  WEIGHTS_HISTORY.push({ts:new Date().toISOString().slice(0,16).replace('T',' '),w:JSON.parse(JSON.stringify(WEIGHTS))});
-  if(WEIGHTS_HISTORY.length>20) WEIGHTS_HISTORY.shift();
-  localStorage.setItem('amz_weights_history',JSON.stringify(WEIGHTS_HISTORY));
-  // 重新计算
-  scoreAll(DATA);
-  renderCurrent();
-  renderSettingsHistory();
-  // Push to backend → plugins auto-sync on next open
-  fetch(API_BASE+'/api/weights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({weights:WEIGHTS,history:[{ts:new Date().toISOString().slice(0,16).replace('T',' '),w:WEIGHTS}],source:'dashboard'})}).catch(function(){});
-  showToast('权重已保存并推送到后端 ✅');
-}
-
 function renderSettingsHistory(){
+  // Per-category tabs
+  var cats = ['运动户外','服装纺织','电子配件','珠宝首饰','家居日用品','玩具','美妆个护'];
+  var catTabsEl = document.getElementById('catTabs');
+  if(catTabsEl){
+    catTabsEl.innerHTML = cats.map(function(c){
+      var active = (currentCat===c)?'background:#1677ff;color:#fff':'background:#f0f0f0';
+      return '<button style="padding:3px 10px;border:none;border-radius:12px;font-size:11px;cursor:pointer;'+active+'" onclick="switchCat(\''+c+'\')">'+c+'</button>';
+    }).join('') + '<button style="padding:3px 10px;border:1px solid #d9d9d9;border-radius:12px;font-size:11px;cursor:pointer" onclick="switchCat(\'\')">默认</button>';
+    // Load current cat weights into sliders
+    var w = (currentCat && CW[currentCat]) ? CW[currentCat] : WEIGHTS;
+    document.getElementById('wPrice').value = w.price;
+    document.getElementById('wDemand').value = w.demand;
+    document.getElementById('wCompetition').value = w.competition;
+    document.getElementById('wBrand').value = w.brand;
+    document.getElementById('wSafety').value = w.safety;
+    document.getElementById('wSocial').value = w.social;
+    updateWeightsSlider();
+  }
+
   var tbody = document.querySelector('#weightsHistoryTable tbody');
   if(!tbody) return;
   var rows = WEIGHTS_HISTORY.slice().reverse().map(function(h,i){
@@ -1308,6 +1306,39 @@ function renderSettingsHistory(){
     return '<tr><td>'+h.ts+'</td><td>'+w.price+'%</td><td>'+w.demand+'%</td><td>'+w.competition+'%</td><td>'+w.brand+'%</td><td>'+w.safety+'%</td><td>'+w.social+'%</td><td><button class="btn btn-sm" onclick="rollbackWeightVersion('+(WEIGHTS_HISTORY.length-1-i)+')">↩ 回滚</button></td></tr>';
   }).join('');
   tbody.innerHTML = rows || '<tr><td colspan="8" style="text-align:center;color:#999">暂无历史版本</td></tr>';
+}
+
+var currentCat = null, CW = {};
+try{CW=JSON.parse(localStorage.getItem('amz_cat_weights')||'{}');}catch(e){}
+
+function switchCat(cat){
+  currentCat = cat;
+  renderSettingsHistory();
+}
+
+function saveWeights(){
+  var keys = ['price','demand','competition','brand','safety','social'];
+  var ids = ['wPrice','wDemand','wCompetition','wBrand','wSafety','wSocial'];
+  var w = {};
+  keys.forEach(function(k,i){w[k]=parseInt(document.getElementById(ids[i]).value)||0;});
+  var total = Object.values(w).reduce(function(a,b){return a+b},0);
+  if(total!==100){showToast('权重总和='+total+'%，必须=100%');return;}
+
+  if(currentCat){
+    CW[currentCat] = w;
+    localStorage.setItem('amz_cat_weights',JSON.stringify(CW));
+  }
+  WEIGHTS = w;
+  localStorage.setItem('amz_weights',JSON.stringify(WEIGHTS));
+  WEIGHTS_HISTORY.push({ts:new Date().toISOString().slice(0,16).replace('T',' '),cat:currentCat||'default',w:JSON.parse(JSON.stringify(w))});
+  if(WEIGHTS_HISTORY.length>20) WEIGHTS_HISTORY.shift();
+  localStorage.setItem('amz_weights_history',JSON.stringify(WEIGHTS_HISTORY));
+  scoreAll(DATA);
+  renderCurrent();
+  renderSettingsHistory();
+  // Push to backend with per-category weights
+  fetch(API_BASE+'/api/weights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({weights:w,cw:CW,history:[{ts:new Date().toISOString().slice(0,16).replace('T',' '),cat:currentCat||'default',w:w}],source:'dashboard'})}).catch(function(){});
+  showToast((currentCat?currentCat:'默认')+' 权重已保存并推送 ✅');
 }
 
 function rollbackWeightVersion(idx){
