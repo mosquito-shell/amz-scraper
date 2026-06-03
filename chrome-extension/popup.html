@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Amazon 选品助手</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:720px;min-height:520px;font:13px/1.5 -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#1f1f1f}
+.tabs-bar{display:flex;background:#f5f5f5;border-bottom:1px solid #e8e8e8}
+.tab-btn{flex:1;padding:10px 0;text-align:center;font-size:12px;cursor:pointer;color:#666;border-bottom:2px solid transparent;transition:all .15s}
+.tab-btn:hover{color:#333}
+.tab-btn.active{color:#1677ff;font-weight:600;border-bottom-color:#1677ff;background:#fff}
+.panel{padding:16px 20px;display:none;max-height:540px;overflow-y:auto}
+.panel.active{display:block}
+.panel h2{font-size:14px;font-weight:600;margin-bottom:14px}
+.export-form .row{display:flex;gap:10px;margin-bottom:12px;align-items:center}
+.export-form label{font-size:11px;color:#666;min-width:70px}
+.export-form input{flex:1;padding:6px 10px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px}
+.group{margin-bottom:12px}
+.group-title{font-size:12px;font-weight:600;color:#333;margin-bottom:5px}
+.opt{display:flex;align-items:center;gap:5px;font-size:12px;color:#333;cursor:pointer}
+.opt input[type=radio],.opt input[type=checkbox]{width:15px;height:15px;accent-color:#1677ff;cursor:pointer}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px}
+.fld input{width:100%;padding:6px 10px;border:1px solid #d9d9d9;border-radius:5px;font-size:12px}
+.fld input:focus{outline:none;border-color:#1677ff}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.btn{padding:7px 18px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:500;transition:all .2s}
+.btn-white{border:1px solid #d9d9d9;background:#fff;color:#666}
+.btn-white:hover{color:#333;border-color:#999}
+.btn-blue{background:#1677ff;color:#fff;border:none}
+.btn-blue:hover{background:#0958d9}
+.btn-green{background:#52c41a;color:#fff;border:none}
+.btn-green:hover{background:#389e0d}
+.btn-block{width:100%;margin-top:6px}
+.status-bar{margin-top:8px;padding:6px 10px;background:#f6ffed;border-radius:4px;font-size:11px;color:#52c41a;display:none}
+.status-bar.error{background:#fff1f0;color:#ff4d4f}
+.progress{padding:8px 0;font-size:11px;color:#666}
+.progress .bar{height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-top:3px}
+.progress .bar .fill{height:100%;background:#1677ff;border-radius:4px;transition:width .3s}
+</style>
+</head>
+<body>
+
+<div class="tabs-bar">
+  <div class="tab-btn active" data-tab="export">📋 类目导出</div>
+  <div class="tab-btn" data-tab="fission">🔗 裂变搜索</div>
+</div>
+
+<div class="panel active" id="p-export">
+  <h2>类目页批量导出</h2>
+  <p style="font-size:10px;color:#999;margin-bottom:12px">数据自动累加，不清空则持续积累。关闭弹窗数据不丢失。</p>
+  <div class="export-form">
+    <div class="row"><label>当前URL</label><input type="text" id="ex-url" placeholder="打开Amazon页面后自动填充" readonly></div>
+    <div class="row"><label>最大商品</label><input type="number" id="ex-count" value="50" min="10" max="500" style="width:80px"></div>
+  </div>
+  <button class="btn btn-green btn-block" id="ex-start">开始导出</button>
+  <button class="btn btn-blue btn-block" id="ex-download" style="display:none">下载 Excel</button>
+  <div class="status-bar" id="ex-status"></div>
+  <div class="progress" id="ex-progress" style="display:none"></div>
+  <div id="ex-workbench" style="display:none;margin-top:12px;border:1px solid #e8e8e8;border-radius:6px">
+    <div class="group-title" style="padding:8px 12px;background:#fafafa;border-bottom:1px solid #eee;display:flex;align-items:center;gap:6px">
+      <span>选品工作台</span><span style="font-size:10px;color:#888" id="ex-wb-count">0件</span>
+      <button class="btn btn-sm btn-white" id="ex-clear" style="color:#ff4d4f">清空</button>
+      <button class="btn btn-sm btn-white" id="ex-tm-check">查商标</button>
+      <button class="btn btn-sm btn-white" id="ex-upload">上传面板</button>
+      <button class="btn btn-sm btn-blue" style="margin-left:auto" id="ex-ltr-submit">提交学习</button>
+    </div>
+    <div style="max-height:320px;overflow:auto"><table id="ex-wb-table"><thead><tr><th width="20">≡</th><th width="30">☑</th><th width="35">图片</th><th>ASIN</th><th>标题</th><th>品牌</th><th>价格</th><th>商标</th><th>分</th><th width="40">标记</th><th width="50">备注</th><th width="40">链接</th><th width="55">HS编码</th><th width="25">删</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<div class="panel" id="p-fission">
+  <h2>创建跟卖抓取任务</h2>
+
+  <div class="group"><div class="group-title">品牌注册状态</div>
+    <div class="group-options">
+      <label class="opt"><input type="radio" name="fs-tm" value="all" checked><span>全部</span></label>
+      <label class="opt"><input type="radio" name="fs-tm" value="yes"><span>已注册</span></label>
+      <label class="opt"><input type="radio" name="fs-tm" value="no"><span>未注册</span></label>
+  </div></div>
+
+  <div class="group"><div class="group-title"><span class="req">*</span>近30天销量范围</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <input type="number" id="fs-sales-min" placeholder="最小" value="0" style="flex:1;padding:5px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px">
+      <span>-</span>
+      <input type="number" id="fs-sales-max" placeholder="最大(空=不限制)" value="" style="flex:1;padding:5px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px">
+    </div>
+  </div>
+
+  <div class="group"><div class="group-title">店铺过滤</div>
+    <label class="opt"><input type="checkbox" id="fs-official" checked><span>过滤 Amazon 开头店铺</span></label>
+  </div>
+
+  <div class="group"><div class="group-title">热销品</div>
+    <label class="opt"><input type="checkbox" id="fs-bestseller"><span>仅抓取详情页含 Best Seller 标识的商品</span></label>
+  </div>
+
+  <div class="group"><div class="group-title">配送方式</div>
+    <div class="grid2">
+      <label class="opt"><input type="checkbox" name="fs-ship" value="FBA" checked><span>亚马逊物流(FBA)</span></label>
+      <label class="opt"><input type="checkbox" name="fs-ship" value="SFP" checked><span>卖家自配送Prime(SFP)</span></label>
+      <label class="opt"><input type="checkbox" name="fs-ship" value="MFN" checked><span>卖家配送网络(MFN)</span></label>
+      <label class="opt"><input type="checkbox" name="fs-ship" value="MCF" checked><span>多渠道配送(MCF)</span></label>
+  </div></div>
+
+  <div class="group fld"><div class="group-title"><span class="req">*</span>采集个数</div>
+    <input type="number" id="fs-count" value="100" min="10" max="5000">
+  </div>
+
+  <div class="group fld"><div class="group-title"><span class="req">*</span>起始 URL (ASIN链接)</div>
+    <input type="text" id="fs-url" value="https://www.amazon.com/dp/B08BNJT83C">
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn btn-white" id="fs-cancel">取消</button>
+    <button class="btn btn-blue" id="fs-create">创建并开始</button>
+  </div>
+
+  <div class="status-bar" id="fs-status"></div>
+  <div class="progress" id="fs-progress" style="display:none"></div>
+  <div id="fs-workbench" style="display:none;margin-top:12px;border:1px solid #e8e8e8;border-radius:6px">
+    <div class="group-title" style="padding:8px 12px;background:#fafafa;border-bottom:1px solid #eee;display:flex;align-items:center;gap:6px">
+      <span>选品工作台</span><span style="font-size:10px;color:#888" id="fs-wb-count">0件</span>
+      <button class="btn btn-sm" onclick="selectAllWB('fs')">全选</button>
+      <button class="btn btn-sm btn-white" id="fs-clear" style="color:#ff4d4f">清空</button>
+      <button class="btn btn-sm btn-white" id="fs-tm-check">查商标</button>
+      <button class="btn btn-sm btn-white" id="fs-upload">上传面板</button>
+      <button class="btn btn-sm btn-blue" style="margin-left:auto" id="fs-ltr-submit">提交学习</button>
+    </div>
+    <div style="max-height:320px;overflow:auto"><table id="fs-wb-table"><thead><tr><th width="20">≡</th><th width="30">☑</th><th width="35">图片</th><th>ASIN</th><th>标题</th><th>品牌</th><th>价格</th><th>商标</th><th>分</th><th width="40">标记</th><th width="50">备注</th><th width="40">链接</th><th width="55">HS编码</th><th width="25">删</th></tr></thead><tbody></tbody></table></div>
+  </div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# 亚马逊选品批量采集关键词
+# 每行一个关键词，以 # 开头的行为注释
+# 采集结果: python batch_crawl.py
+
+badminton set backyard
+yoga pants women high waist
+bracelet women gold stackable
+portable bluetooth speaker
+yoga mat non slip
+resistance bands set
+pilates socks grip
+stainless steel water bottle
+led strip lights bedroom
+phone stand adjustable desk
+cable management desk
+silicone baking mat
+measuring spoons set
+pet grooming gloves
+baby sensory toys

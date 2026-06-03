@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.wrangler/
+node_modules/
+product_images/
+*.xlsx
+!111.xlsx
+!领翼-模版.xlsx
+dashboard/.wrangler/
+*.log

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amazon 选品运营管理平台</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#f0f2f5;--card:#fff;--primary:#1677ff;--success:#52c41a;--warning:#faad14;--danger:#ff4d4f;
+  --text:#1f1f1f;--text2:#666;--border:#e8e8e8;--shadow:0 1px 4px rgba(0,0,0,.06);
+}
+body{font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);display:flex;min-height:100vh}
+
+/* ---- Sidebar ---- */
+.sidebar{width:200px;background:#001529;color:#fff;flex-shrink:0;display:flex;flex-direction:column;box-shadow:1px 0 4px rgba(0,0,0,.1)}
+.sidebar .logo{padding:18px 16px 14px;font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar .logo span{font-size:11px;opacity:.5;font-weight:400}
+.sidebar nav{padding:4px 0;flex:1}
+.sidebar nav a{display:flex;align-items:center;gap:8px;padding:9px 16px;color:rgba(255,255,255,.65);text-decoration:none;font-size:12px;transition:all .15s;border-left:3px solid transparent}
+.sidebar nav a:hover{color:#fff;background:rgba(255,255,255,.06);border-left-color:#1677ff}
+.sidebar nav a.active{color:#fff;background:rgba(255,255,255,.1);border-left-color:#1890ff;font-weight:600}
+.sidebar .status{padding:10px 16px;font-size:10px;color:rgba(255,255,255,.4);border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;gap:6px}
+@keyframes pulse{50%{opacity:.3}}
+
+/* ---- Main Layout ---- */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+.topbar{padding:11px 20px;background:var(--card);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;z-index:1}
+.topbar h2{font-size:15px;font-weight:600}
+.topbar .actions{display:flex;gap:6px;align-items:center}
+.content{flex:1;overflow-y:auto;padding:16px 20px}
+.page{display:none}
+.page.active{display:block}
+
+/* ---- Stats Row ---- */
+.stats-grid{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.stat-card{background:var(--card);border-radius:8px;padding:14px 18px;box-shadow:var(--shadow);display:flex;align-items:center;gap:12px;flex:1;min-width:180px}
+.stat-card .icon{width:42px;height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.stat-card .icon.blue{background:#e6f4ff;color:#1677ff}
+.stat-card .icon.green{background:#f6ffed;color:#52c41a}
+.stat-card .icon.orange{background:#fff7e6;color:#fa8c16}
+.stat-card .icon.red{background:#fff2f0;color:#ff4d4f}
+.stat-card .icon.purple{background:#f9f0ff;color:#722ed1}
+.stat-card .info{min-width:0}
+.stat-card .info .num{font-size:18px;font-weight:700;line-height:1.2}
+.stat-card .info .label{font-size:11px;color:var(--text2);margin-top:2px}
+
+/* ---- Panels & Tables ---- */
+.panel{background:var(--card);border-radius:8px;box-shadow:var(--shadow);margin-bottom:14px;overflow:hidden}
+.panel .head{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:13px;background:#fafafa}
+.panel .head .extra{font-weight:400;font-size:11px;color:var(--text2)}
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{background:#fafafa;padding:8px 10px;border-bottom:2px solid var(--border);text-align:left;font-weight:600;font-size:11px;color:var(--text2);white-space:nowrap;position:sticky;top:0;z-index:1}
+td{padding:6px 10px;border-bottom:1px solid #f0f0f0;font-size:12px;max-width:200px;overflow:hidden;text-overflow:ellipsis}
+td input,td select{font-size:12px;padding:3px 6px;border:1px solid #d9d9d9;border-radius:3px;width:62px}
+td input:focus,td select:focus{outline:none;border-color:var(--primary)}
+tr:hover{background:#fafafa}
+.score-high{background:#f6ffed!important}
+.score-mid{background:#fffbe6!important}
+.score-low{background:#fff2f0!important}
+
+/* ---- Badges ---- */
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600;text-align:center;min-width:18px}
+.badge-green{background:#e6f9e6;color:#389e0d}
+.badge-red{background:#fff1f0;color:#cf1322}
+.badge-yellow{background:#fffbe6;color:#d48806}
+.badge-blue{background:#e6f4ff;color:#1677ff}
+
+/* ---- Buttons ---- */
+.btn{padding:5px 14px;border:1px solid #d9d9d9;border-radius:5px;cursor:pointer;font-size:12px;background:#fff;transition:all .2s;white-space:nowrap}
+.btn:hover{opacity:.85;border-color:#1677ff;color:#1677ff}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{background:#0958d9;color:#fff}
+.btn-success{background:var(--success);color:#fff;border-color:var(--success)}
+.btn-danger{background:var(--danger);color:#fff;border-color:var(--danger)}
+.btn-sm{padding:2px 8px;font-size:11px}
+
+/* ---- Form ---- */
+input[type=text],input[type=url],input[type=number],select{padding:6px 10px;border:1px solid #d9d9d9;border-radius:5px;font-size:12px}
+input[type=text]:focus,input[type=url]:focus,input[type=number]:focus,select:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 2px rgba(22,119,255,.12)}
+
+/* ---- Charts ---- */
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.chart-box{background:var(--card);border-radius:8px;box-shadow:var(--shadow);padding:16px}
+.chart-box h3{font-size:13px;margin-bottom:10px;font-weight:600}
+.chart{height:180px;display:flex;align-items:flex-end;gap:5px;padding:8px 0}
+.chart .bar{flex:1;background:linear-gradient(180deg,#1677ff,#69b1ff);border-radius:4px 4px 0 0;min-width:18px;position:relative;transition:all .3s}
+.chart .bar:hover{opacity:.8}
+.chart .bar .val{position:absolute;top:-16px;left:50%;transform:translateX(-50%);font-size:10px;color:var(--text2);white-space:nowrap}
+.chart .bar .lbl{position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);font-size:9px;color:var(--text2);white-space:nowrap}
+
+/* ---- Misc ---- */
+.store-input{padding:14px;display:flex;gap:8px;background:var(--card);border-radius:8px;box-shadow:var(--shadow);margin-bottom:14px}
+.store-input input{flex:1}
+.filter-bar{padding:8px 12px;background:#fafafa;border-bottom:1px solid var(--border);display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:11px}
+.filter-bar input[type=checkbox]{width:14px;height:14px;margin-right:2px}
+.filter-bar label{margin-right:6px;font-size:11px;color:var(--text2)}
+.filter-bar select,.filter-bar input{width:auto!important;min-width:60px}
+.toast{position:fixed;top:16px;right:16px;padding:8px 16px;background:#1f1f1f;color:#fff;border-radius:6px;z-index:999;font-size:12px;animation:slideIn .3s}
+@keyframes slideIn{from{transform:translateX(100%);opacity:0}to{transform:translateX(0);opacity:1}}
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:998;display:flex;align-items:center;justify-content:center}
+.modal{background:#fff;border-radius:10px;padding:20px;max-width:480px;width:90%;box-shadow:0 8px 30px rgba(0,0,0,.15)}
+.modal h3{font-size:15px;margin-bottom:10px}
+.modal .row{margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.modal .row label{width:100px;font-size:12px;color:var(--text2);flex-shrink:0}
+.modal .btns{margin-top:14px;display:flex;gap:8px;justify-content:flex-end}
+@media(max-width:768px){.sidebar{width:54px}.sidebar .logo span,.sidebar nav a span{display:none}.chart-row{grid-template-columns:1fr}.stats-grid{flex-direction:column}}
+</style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<div class="sidebar">
+  <div class="logo">📊 <span>选品运营平台</span></div>
+  <nav>
+    <a href="#" data-page="dashboard" class="active"><span class="icon">📈</span> 仪表盘</a>
+    <a href="#" data-page="ranking"><span class="icon">🏆</span> 选品排名</a>
+    <a href="#" data-page="trademark"><span class="icon">®️</span> 商标管理</a>
+    <a href="#" data-page="finance"><span class="icon">💰</span> 财务指标</a>
+    <a href="#" data-page="learning"><span class="icon">🧠</span> ML 反馈学习</a>
+    <a href="#" data-page="proxy"><span class="icon">🌐</span> 代理网络</a>
+    <a href="#" data-page="settings"><span class="icon">⚙️</span> 权重配置</a>
+  </nav>
+  <div class="status"><span class="dot"></span> 代理: 在线 (双Worker)</div>
+</div>
+
+<!-- Main -->
+<div class="main">
+  <div class="topbar">
+    <h2 id="pageTitle">📈 仪表盘</h2>
+    <div class="actions">
+      <button class="btn btn-primary" onclick="refreshAll()">🔄 刷新数据</button>
+      <button class="btn" onclick="syncFromBackend()" style="background:#722ed1;color:#fff">☁️ 从后端同步</button>
+      <button class="btn btn-success" onclick="exportExcel()">📥 导出 Excel</button>
+      <button class="btn" onclick="generateLogisticsInvoice()" style="background:#ff9900;color:#000;font-weight:bold">🧾 生成物流发票</button>
+    </div>
+  </div>
+
+  <div class="content" id="mainContent">
+    <!-- ====== Dashboard ====== -->
+    <div class="page active" id="page-dashboard">
+      <div class="stats-grid" id="dashStats"></div>
+      <div class="chart-row">
+        <div class="chart-box"><h3>品类分布</h3><div class="chart" id="categoryChart"></div></div>
+        <div class="chart-box"><h3>价格区间分布</h3><div class="chart" id="priceChart"></div></div>
+      </div>
+      <div class="panel">
+        <div class="head">TOP 10 推荐 <span class="extra">按综合评分排序</span></div>
+        <div class="table-wrap"><table id="top10Table"><thead><tr><th>#</th><th>图片</th><th>ASIN</th><th>标题</th><th>品牌</th><th>售价</th><th>评分</th><th>商标</th><th>综合分</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ====== Ranking ====== -->
+    <div class="page" id="page-ranking">
+      <div class="panel">
+        <div class="head">全部推荐排名 <span class="extra" id="rankCount"></span></div>
+        <div style="padding:6px 12px;background:#fafafa;display:flex;gap:8px;align-items:center;font-size:11px">
+  <b>筛选:</b> <input type="checkbox" id="rankHideOfficial" onchange="renderRanking()" style="width:14px"> <label>排除官方店</label>
+  <input type="checkbox" id="rankHideSponsored" onchange="renderRanking()" checked> <label>排除广告</label>
+  <input type="checkbox" id="rankUnregOnly" onchange="renderRanking()"> <label>只看未注册商标</label>
+</div>
+<div class="table-wrap"><table id="rankingTable"><thead><tr><th>#</th><th>图</th><th>ASIN</th><th>标题</th><th>品牌</th><th>售价</th><th>评分</th><th>评论</th><th>BSR</th><th>月销</th><th>配送</th><th>商标</th><th>分数</th><th>推荐</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ====== Trademark ====== -->
+    <div class="page" id="page-trademark">
+      <div class="stats-grid" id="tmStats"></div>
+      <div class="panel">
+        <div class="head">商标状态一览 <span class="extra">点击数字切换状态</span></div>
+        <div class="table-wrap"><table id="tmTable"><thead><tr><th>品牌</th><th>出现次数</th><th>商标状态</th><th>最低价</th><th>最高分</th><th>操作</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ====== Finance ====== -->
+    <div class="page" id="page-finance">
+      <div class="stats-grid" id="finStats"></div>
+      <div class="panel">
+        <div class="head">单品利润分析 <span class="extra">NP/ROI/T/MNP/MC/ITO 六维产品级指标</span></div>
+        <div class="table-wrap"><table id="finTable"><thead><tr><th>ASIN</th><th>标题</th><th>售价</th><th style="background:#fffbe6">采购✎</th><th style="background:#fffbe6">销量✎</th><th style="background:#fffbe6">FBA费✎</th><th style="background:#fffbe6">头程✎</th><th>关税</th><th>佣金</th><th>NP</th><th>月利润</th><th>资金C</th><th>ROI%</th><th>T</th><th>ITO</th><th>MNP</th><th>MC</th><th>ROIC</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ====== ML Learning ====== -->
+    <div class="page" id="page-learning">
+      <div class="stats-grid" id="learnStats"></div>
+
+      <div class="chart-row">
+        <div class="chart-box" style="grid-column:1/-1">
+          <h3>📋 选品工作台 <span style="font-size:10px;color:#888;font-weight:normal">拖拽行排序 | 点击标记 | 双击编辑备注 | 勾选后提交学习</span></h3>
+          <div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-sm btn-primary" onclick="selectAllProducts()">全选</button>
+            <button class="btn btn-sm" onclick="deselectAllProducts()">全不选</button>
+            <button class="btn btn-sm" onclick="selectHighScore()">高分(>70)</button>
+            <button class="btn btn-sm" onclick="selectLowPrice()">低价(<$25)</button>
+            <span style="font-size:11px;color:#888;padding:4px 8px">已选 <b style="font-size:14px;color:#1677ff" id="selectCount">0</b> / <span id="selectTotal">0</span></span>
+            <span style="flex:1"></span>
+            <button class="btn btn-sm" onclick="resetProductOrder()">↩ 恢复原始排序</button>
+            <button class="btn btn-sm" onclick="exportSelections()">📥 导出勾选</button>
+            <button class="btn btn-sm btn-primary" onclick="submitLearning()">🧠 提交学习</button>
+          </div>
+          <div style="max-height:350px;overflow:auto;border:1px solid #f0f0f0;border-radius:4px">
+            <table id="selectTable"><thead><tr>
+              <th width="28" title="拖拽手柄">≡</th><th width="36">☑</th><th width="40">图</th><th>ASIN</th><th style="min-width:100px">标题</th><th>品牌</th><th>售价</th><th>评分</th><th>商标</th><th>分数</th><th width="60">标记</th><th width="80">备注</th>
+            </tr></thead><tbody></tbody></table>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:6px;font-size:10px;color:#888">
+            <span>| 拖拽行 = 人工排序 | 点击标记列 = 切换状态 | 双击备注列 = 编辑文字 | 勾选 + 提交学习 = 分析偏好</span>
+          </div>
+        </div>
+
+        <div class="chart-box">
+          <h3>📁 上传筛选后的 Excel</h3>
+          <div style="text-align:center;padding:20px;border:2px dashed #d9d9d9;border-radius:8px;background:#fafafa;cursor:pointer"
+               ondrop="handleDrop(event)" ondragover="event.preventDefault()"
+               ondragleave="this.style.borderColor='#d9d9d9'" ondragenter="this.style.borderColor='#1677ff'"
+               onclick="document.getElementById('learnFile').click()">
+            <div style="font-size:28px;margin-bottom:6px">📁</div>
+            <div style="font-size:13px;color:#666">拖拽 Excel / JSON 到此处，或点击选择</div>
+            <div style="font-size:10px;color:#bbb;margin-top:4px">插件导出的 .json 或 Excel → 自动识别格式 → 加载数据</div>
+            <input type="file" id="learnFile" accept=".xlsx,.xls,.json" onchange="handleFileUpload(this)" style="display:none">
+            <div style="margin-top:10px;display:flex;gap:6px;justify-content:center">
+              <button class="btn btn-sm" onclick="event.stopPropagation();document.getElementById('learnFile').click()">📂 选择文件</button>
+              <button class="btn btn-sm" onclick="event.stopPropagation();simulateLearning()">🎲 模拟反馈</button>
+            </div>
+          </div>
+          <div id="learnStatus" style="margin-top:8px;font-size:11px;color:#888"></div>
+        </div>
+      </div>
+
+      <!-- 学习结果 -->
+      <div class="panel" id="learnResultPanel" style="display:none">
+        <div class="head">🧠 学习结果 <span class="extra" id="learnResultTitle"></span></div>
+        <div class="table-wrap">
+          <table id="learnTable">
+            <thead><tr><th>维度</th><th width="70">原权重</th><th width="70">新权重</th><th width="70">变化</th><th>学习理由</th><th width="80">操作</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+
+      <!-- 历史 -->
+      <div class="chart-row">
+        <div class="chart-box"><h3>📜 学习历史</h3><div id="learnHistory" style="max-height:180px;overflow:auto;font-size:11px"></div></div>
+        <div class="chart-box"><h3>📈 当前权重分布</h3><div class="chart" id="weightTrendChart"></div></div>
+      </div>
+    </div>
+
+    <!-- ====== Proxy Network ====== -->
+    <div class="page" id="page-proxy">
+      <div class="stats-grid" id="proxyStats"></div>
+      <div class="chart-row">
+        <div class="panel" style="grid-column:1">
+          <div class="head">CF Worker 代理状态 <span class="extra" id="proxyLastCheck"></span></div>
+          <div class="table-wrap"><table id="proxyTable"><thead><tr><th>名称</th><th>地址</th><th>状态</th><th>延迟</th><th>在线</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="panel" style="grid-column:1">
+          <div class="head">IP 池状态 <span class="extra" id="ipLastUpdate"></span></div>
+          <div style="padding:14px;font-size:12px">
+            <p style="margin-bottom:8px"><b>扫描来源:</b> 6 个开源 IP 源 + GitHub Actions 每日更新</p>
+            <p style="margin-bottom:8px"><b>可用 IP:</b> <span id="ipPoolCount" style="font-weight:bold;font-size:16px;color:#52c41a">--</span></p>
+            <p style="margin-bottom:8px"><b>代理架构:</b> 4 Workers 轮询 + IP 冷却池 + 10分钟自动解冻</p>
+            <p style="font-size:10px;color:#888;margin-bottom:8px">反检测: UA轮换(20个) + IP冷却 + 验证码检测 + 多Worker轮换</p>
+            <button class="btn btn-sm btn-primary" onclick="refreshProxy()">🔄 刷新状态</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="head">IP 列表 <span class="extra" id="ipListCount"></span></div>
+        <div class="table-wrap"><table id="ipTable"><thead><tr><th>IP</th><th>端口</th><th>来源</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- ====== Settings ====== -->
+    <div class="page" id="page-settings">
+      <div class="chart-row">
+        <!-- 权重面板 -->
+        <div class="chart-box">
+          <h3>⚙️ 评分权重配置</h3>
+          <p style="font-size:11px;color:#888;margin-bottom:12px">拖动滑块调整各维度权重，总和必须 = 100%</p>
+          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>💲 价格</span><span id="wPriceLabel">20%</span></label><input type="range" id="wPrice" value="20" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>📊 需求 (BSR)</span><span id="wDemandLabel">25%</span></label><input type="range" id="wDemand" value="25" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>🏪 竞争 (评论数)</span><span id="wCompetitionLabel">20%</span></label><input type="range" id="wCompetition" value="20" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>®️ 品牌</span><span id="wBrandLabel">15%</span></label><input type="range" id="wBrand" value="15" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>🛡️ 安全</span><span id="wSafetyLabel">10%</span></label><input type="range" id="wSafety" value="10" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          <div style="margin:10px 0"><label style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>⭐ 社交 (评分)</span><span id="wSocialLabel">10%</span></label><input type="range" id="wSocial" value="10" min="0" max="100" style="width:100%" oninput="updateWeightsSlider()"></div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:10px;border-top:2px solid #f0f0f0">
+            <div style="font-size:18px;font-weight:700">总计: <span id="wTotal" style="font-size:22px">100%</span></div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-sm" onclick="resetWeightsDefault()">↩ 默认</button>
+              <button class="btn btn-sm btn-primary" onclick="saveWeights()">💾 保存并应用</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 评分规则说明 -->
+        <div class="chart-box">
+          <h3>📖 各维度评分规则</h3>
+          <div style="font-size:11px;color:var(--text2);line-height:1.8;max-height:400px;overflow:auto">
+            <p style="margin-bottom:8px"><b>💲 价格 (price)</b><br>$12-25 黄金区=95分 | $25-40=85分 | $40-70=60分 | <$8仅15分 | >$120仅15分</p>
+            <p style="margin-bottom:8px"><b>📊 需求/BSR (demand)</b><br>BSR<500 爆款=98分 | <2000 热销=90分 | <5000 好卖=80分 | <10000 不错=65分 | 无BSR用月销推算</p>
+            <p style="margin-bottom:8px"><b>🏪 竞争/评论 (competition)</b><br>100-500评论蓝海=80分 | <30新品=90分 | 500-2000成长=60分 | >15000血海=5分</p>
+            <p style="margin-bottom:8px"><b>®️ 品牌 (brand)</b><br>未注册品牌/待查=90分(安全) | 知名品牌=70分 | 无品牌/Generic=30分 | 已注册=30分(风险)</p>
+            <p style="margin-bottom:8px"><b>🛡️ 安全 (safety)</b><br>非广告+25分 | 有品牌名+15分 | 未注册商标+10分 | 已注册商标-10分 | 含replacement等敏感词-20</p>
+            <p><b>⭐ 社交证明 (social)</b><br>评分×15 | 评论>100额外+10 | 评论>1000额外+10</p>
+
+            <div style="margin-top:16px;padding:12px;background:#f6ffed;border-radius:6px;border-left:3px solid #52c41a">
+              <b style="font-size:12px">💡 推荐策略</b>
+              <p style="font-size:11px;margin-top:4px;color:#666">跟卖选品倾向：高需求(低BSR)+低竞争(少评论)+未注册品牌+低价黄金区。<br>提高"需求"和"竞争"权重来找蓝海品；提高"品牌"和"安全"权重避免侵权。</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 权重历史版本 -->
+      <div class="panel">
+        <div class="head">📝 权重版本历史 <span class="extra">每次保存自动记录，可随时回滚</span></div>
+        <div class="table-wrap">
+          <table id="weightsHistoryTable">
+            <thead><tr><th>时间</th><th>价格</th><th>需求</th><th>竞争</th><th>品牌</th><th>安全</th><th>社交</th><th>操作</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="embedded_data.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>

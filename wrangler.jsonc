@@ -1,0 +1,11 @@
+{
+  "name": "amz-api",
+  "main": "cf-api-worker.js",
+  "compatibility_date": "2024-12-01",
+  "kv_namespaces": [
+    {
+      "binding": "AMZ_DATA",
+      "id": "c8c990c6b35f4e5db223c47ea07e293e"
+    }
+  ]
+}

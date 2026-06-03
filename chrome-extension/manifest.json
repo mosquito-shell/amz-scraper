@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Amazon 选品助手",
+  "version": "1.1",
+  "description": "亚马逊商品一键抓取+智能打分+商标查询+导出Excel",
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "host_permissions": [
+    "https://www.amazon.com/*",
+    "https://www.amazon.co.uk/*",
+    "https://www.amazon.de/*",
+    "https://www.amazon.co.jp/*",
+    "https://www.amazon.ca/*",
+    "https://proxy.tsscjn.top/*",
+    "https://api.tsscjn.top/*",
+    "https://tsdr.uspto.gov/*",
+    "https://tmsearch.uspto.gov/*",
+    "https://api.uspto.gov/*",
+    "https://api.branddb.wipo.int/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Amazon 选品助手"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.amazon.com/*",
+        "https://www.amazon.co.uk/*",
+        "https://www.amazon.de/*",
+        "https://www.amazon.co.jp/*",
+        "https://www.amazon.ca/*"
+      ],
+      "js": ["content.js", "sidepanel.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
