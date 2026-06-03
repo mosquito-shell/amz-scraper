@@ -16,28 +16,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug env
-        run: |
-          python3 --version
-          pip --version
-          ls -la
-          echo "---"
-
       - name: Install deps
         run: pip install requests urllib3
 
       - name: Scan IPs
-        run: python3 ip_scanner.py --full --max 80 2>&1
-        continue-on-error: true
+        run: python3 ip_scanner.py --full --max 80
 
-      - name: Fallback quick scan
-        if: failure()
-        run: python3 ip_scanner.py --show 2>&1 || echo "No cache yet"
-
-      - name: Commit
+      - name: Commit proxy files
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add proxyIP.txt proxyIP_cache.json
           git diff --staged --quiet || git commit -m "chore: IP scan $(date +%H:%M)"
           git push
+
+      - name: Sync to backend API
+        run: |
+          curl -s -X POST https://api.tsscjn.top/api/ip-pool \
+            -H 'Content-Type: application/json' \
+            -d @proxyIP_cache.json

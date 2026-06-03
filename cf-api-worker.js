@@ -234,6 +234,34 @@ async function handleRequest(request, env) {
       return cors(request, response);
     }
 
+    // ===== IP Pool (从主仓库 proxyIP_cache.json 同步) =====
+    if (path === '/api/ip-pool' && method === 'GET') {
+      const data = await env.AMZ_DATA.get('ip_pool', 'json') || { ips: [], total: 0, updated: 'never' };
+      response = json(data);
+      return cors(request, response);
+    }
+
+    if (path === '/api/ip-pool' && method === 'POST') {
+      const body = await request.json();
+      const existing = await env.AMZ_DATA.get('ip_pool', 'json') || { ips: [], total: 0 };
+      // Merge new IPs, deduplicate
+      const seen = {};
+      existing.ips.forEach(function(ip) { seen[ip.ip+':'+ip.port] = true; });
+      let added = 0;
+      (body.ips || []).forEach(function(ip) {
+        var key = ip.ip+':'+ip.port;
+        if (!seen[key]) { seen[key] = true; existing.ips.push(ip); added++; }
+      });
+      existing.total = existing.ips.length;
+      existing.updated = body.updated || new Date().toISOString();
+      // Cap at 1000
+      if (existing.ips.length > 1000) existing.ips = existing.ips.slice(-1000);
+      existing.total = existing.ips.length;
+      await env.AMZ_DATA.put('ip_pool', JSON.stringify(existing));
+      response = json({ ok: true, total: existing.total, added: added });
+      return cors(request, response);
+    }
+
     // ===== 多人合并训练 =====
     if (path === '/api/merge-training' && method === 'POST') {
       const body = await request.json();

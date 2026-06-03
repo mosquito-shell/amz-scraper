@@ -1406,8 +1406,8 @@ function renderProxy(){
       document.getElementById('proxyStats').innerHTML = '<div class="stat-card"><div class="icon red">❌</div><div class="info"><div class="num">离线</div><div class="label">后端不可达</div></div></div>';
     });
 
-  // Load IP pool from proxyIP_cache.json
-  fetch('../proxyIP_cache.json?t='+Date.now())
+  // Load IP pool from backend API
+  fetch(API_BASE+'/api/ip-pool')
     .then(function(r){return r.json();})
     .then(function(d){
       document.getElementById('ipPoolCount').textContent = d.total + ' 个';
