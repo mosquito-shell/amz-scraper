@@ -121,6 +121,7 @@ input[type=text]:focus,input[type=url]:focus,input[type=number]:focus,select:foc
     <a href="#" data-page="trademark"><span class="icon">®️</span> 商标管理</a>
     <a href="#" data-page="finance"><span class="icon">💰</span> 财务指标</a>
     <a href="#" data-page="learning"><span class="icon">🧠</span> ML 反馈学习</a>
+    <a href="#" data-page="compare"><span class="icon">📊</span> 用户对比</a>
     <a href="#" data-page="proxy"><span class="icon">🌐</span> 代理网络</a>
     <a href="#" data-page="settings"><span class="icon">⚙️</span> 权重配置</a>
   </nav>
@@ -244,6 +245,25 @@ input[type=text]:focus,input[type=url]:focus,input[type=number]:focus,select:foc
       <div class="chart-row">
         <div class="chart-box"><h3>📜 学习历史</h3><div id="learnHistory" style="max-height:180px;overflow:auto;font-size:11px"></div></div>
         <div class="chart-box"><h3>📈 当前权重分布</h3><div class="chart" id="weightTrendChart"></div></div>
+      </div>
+    </div>
+
+    <!-- ====== Multi-User Compare ====== -->
+    <div class="page" id="page-compare">
+      <div class="stats-grid" id="compareStats"></div>
+      <div class="chart-row">
+        <div class="panel">
+          <div class="head">用户选品对比 <span class="extra">勾选保留率 & 品牌偏好</span></div>
+          <div class="table-wrap"><table id="compareTable"><thead><tr><th>用户</th><th>选品数</th><th>保留率</th><th>偏好品类</th><th>偏好品牌</th><th>均分</th><th>最后更新</th></tr></thead><tbody></tbody></table></div>
+        </div>
+        <div class="panel">
+          <div class="head">品类交叉对比 <span class="extra">各用户在不同品类的选择差异</span></div>
+          <div class="table-wrap"><table id="compareCatTable"><thead><tr><th>品类</th><th>总选品</th><th>保留</th><th>保留率</th><th>用户共识度</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="head">权重收敛趋势</div>
+        <div class="table-wrap"><table id="compareWeightTable"><thead><tr><th>时间</th><th>Price</th><th>Demand</th><th>Competition</th><th>Brand</th><th>Safety</th><th>Social</th><th>来源</th></tr></thead><tbody></tbody></table></div>
       </div>
     </div>
 

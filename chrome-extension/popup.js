@@ -160,7 +160,27 @@ function hsGuess(title,brand){
   return{code:'6117.90',name:'通用纺织品/杂项',tariff:7.5};
 }
 
-function hsFor(p){if(wbHS[p.asin])return wbHS[p.asin];var h=hsGuess(p.title,p.brand);wbHS[p.asin]=h;return h;}
+function hsFor(p){if(wbHS[p.asin])return wbHS[p.asin];
+  // G: 字段修正建议 — 同品牌优先复用历史手动编辑的HS
+  var bk=(p.brand||'').toLowerCase().trim();var best=null;
+  Object.keys(wbHS).forEach(function(a){var h=wbHS[a];if(h&&h._manual&&h._brand===bk){best=h;}});
+  if(best)return best;
+  var h=hsGuess(p.title,p.brand);wbHS[p.asin]=h;return h;
+}
+// G: 字段修正历史
+var FIELD_CORRECTIONS={};try{FIELD_CORRECTIONS=JSON.parse(localStorage.getItem('amz_field_corrections')||'{}');}catch(e){}
+function suggestField(p,field){
+  var bk=(p.brand||'').toLowerCase().trim();var cat=p._cat||catFor(p);
+  var history=FIELD_CORRECTIONS[bk]||{};if(history[field])return history[field];
+  history=FIELD_CORRECTIONS[cat]||{};if(history[field])return history[field];
+  return null;
+}
+function saveCorrection(brand,field,value){
+  var bk=(brand||'').toLowerCase().trim();if(!bk||!value)return;
+  if(!FIELD_CORRECTIONS[bk])FIELD_CORRECTIONS[bk]={};
+  FIELD_CORRECTIONS[bk][field]=value;
+  localStorage.setItem('amz_field_corrections',JSON.stringify(FIELD_CORRECTIONS));
+}
 function hsSave(){localStorage.setItem('amz_hs_codes',JSON.stringify(wbHS));}
 function save(){localStorage.setItem('amz_product_tags',JSON.stringify(wbTags));localStorage.setItem('amz_product_notes',JSON.stringify(wbNotes));localStorage.setItem('amz_weights',JSON.stringify(W));localStorage.setItem('amz_cat_weights',JSON.stringify(CW));localStorage.setItem('amz_weights_history',JSON.stringify(WH));localStorage.setItem('amz_tm_cache',JSON.stringify(TM_CACHE));localStorage.setItem('amz_ex_products',JSON.stringify(exProducts));localStorage.setItem('amz_fs_products',JSON.stringify(fsProducts));hsSave();}
 
@@ -230,7 +250,7 @@ function rWB(prods,tid,cid,pfx){
     var lk=p.link||('https://www.amazon.com/dp/'+p.asin);
     var tr=document.createElement('tr');tr.style.cssText=cl+';border-bottom:1px solid #f0f0f0';tr.setAttribute('draggable','true');tr.dataset.asin=p.asin;
     tr.innerHTML='<td style="cursor:grab;text-align:center;color:#ccc">+</td><td><input type="checkbox" '+ch+'></td><td style="text-align:center">'+ic+'</td><td style="font-size:9px">'+p.asin+'</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(p.title||'').replace(/"/g,'&quot;')+'">'+(p.title||'')+'</td><td style="font-size:10px">'+(p.brand||'--')+'</td><td>'+(p.price?'$'+p.price:'--')+'</td><td style="font-weight:bold;'+tc+'">'+tmr+'</td><td style="font-weight:bold">'+(p.score||'--')+'</td><td style="cursor:pointer;text-align:center;font-size:14px">'+th+'</td><td style="font-size:9px;color:#888">'+nt+'</td><td style="font-size:9px"><a href="'+lk+'" target="_blank" style="color:#1677ff">link</a></td><td style="text-align:center;cursor:pointer;color:#ccc;font-size:16px" title="删除此条" class="wb-del">×</td>';
-    var hsc=hsFor(p);var hsTd=document.createElement('td');hsTd.style.cssText='font-size:9px;color:#722ed1;cursor:pointer';hsTd.title=hsc.name+' | 关税 '+hsc.tariff+'%';hsTd.textContent=hsc.code;hsTd.addEventListener('dblclick',function(){var c=wbHS[p.asin]?wbHS[p.asin].code:hsc.code;var inp=prompt('HS编码(手动输入):',c);if(inp===null)return;wbHS[p.asin]={code:inp.trim(),name:hsc.name,tariff:hsc.tariff};hsSave();rWB(prods,tid,cid,pfx);});tr.appendChild(hsTd);
+    var hsc=hsFor(p);var hsTd=document.createElement('td');hsTd.style.cssText='font-size:9px;color:#722ed1;cursor:pointer';hsTd.title=hsc.name+' | 关税 '+hsc.tariff+'%';hsTd.textContent=hsc.code;hsTd.addEventListener('dblclick',function(){var c=wbHS[p.asin]?wbHS[p.asin].code:hsc.code;var inp=prompt('HS编码(手动输入):',c);if(inp===null)return;wbHS[p.asin]={code:inp.trim(),name:hsc.name,tariff:hsc.tariff,_manual:true,_brand:(p.brand||'').toLowerCase().trim()};saveCorrection(p.brand,'hsCode',inp.trim());hsSave();rWB(prods,tid,cid,pfx);});tr.appendChild(hsTd);
     tr.querySelector('input[type=checkbox]').addEventListener('change',function(){wbChecked[p.asin]=this.checked;});
     var tds=tr.querySelectorAll('td');tds[9].addEventListener('click',function(){var cy=['','priority','maybe','reject'];var c=wbTags[p.asin]||'';var n=cy[(cy.indexOf(c)+1)%4];wbTags[p.asin]=n;if(!n)delete wbTags[p.asin];save();rWB(prods,tid,cid,pfx);});
     tds[10].addEventListener('dblclick',function(){var c=wbNotes[p.asin]||'';var inp=prompt('备注(50字):',c);if(inp===null)return;if(inp.length>50)inp=inp.substr(0,50);wbNotes[p.asin]=inp.trim();if(!wbNotes[p.asin])delete wbNotes[p.asin];save();rWB(prods,tid,cid,pfx);});
@@ -504,7 +524,19 @@ document.getElementById('fs-create').addEventListener('click',function(){
   chrome.runtime.sendMessage({action:'startFission',seed:seed,target:target,filters:filters,tabId:activeTabId});
 });
 
-// === PRD 6: 每日定时自动上传 ===
+document.getElementById('fs-seller-start').addEventListener('click',function(){
+  if(fissionRunning){chrome.runtime.sendMessage({action:'cancelFission'});fissionRunning=false;}
+  var m=document.getElementById('fs-url').value.trim().match(/[A-Z0-9]{10}/);if(!m){alert('No valid ASIN');return;}
+  var seed=m[0],target=parseInt(document.getElementById('fs-count').value)||100;
+  fissionRunning=true;
+  var st=document.getElementById('fs-status');st.style.display='block';st.className='status-bar';st.textContent='Store scan...';
+  document.getElementById('fs-progress').style.display='block';
+  var d2=document.getElementById('fs-download');if(d2)d2.style.display='none';
+  document.getElementById('fs-workbench').style.display='none';
+  document.getElementById('fs-create').textContent='关键词裂变';document.getElementById('fs-create').disabled=false;
+  this.textContent='运行中...';this.disabled=true;
+  chrome.runtime.sendMessage({action:'startFissionSeller',seed:seed,target:target,tabId:activeTabId});
+});
 var lastAutoUpload=parseInt(localStorage.getItem('amz_last_auto_upload')||'0');
 setInterval(function(){
   var now=Date.now();

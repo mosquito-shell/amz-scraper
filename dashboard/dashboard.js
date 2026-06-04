@@ -310,7 +310,7 @@ function switchPage(page){
   if(el) el.classList.add('active');
   document.getElementById('pageTitle').textContent = {
     dashboard:'📈 仪表盘',ranking:'🏆 选品排名',trademark:'®️ 商标管理',
-    finance:'💰 财务指标',learning:'🧠 ML 反馈学习',proxy:'🌐 代理网络',settings:'⚙️ 权重配置'
+    finance:'💰 财务指标',learning:'🧠 ML 反馈学习',compare:'📊 用户对比',proxy:'🌐 代理网络',settings:'⚙️ 权重配置'
   }[page]||'';
 
   if(page==='dashboard') renderDashboard();
@@ -318,6 +318,7 @@ function switchPage(page){
   if(page==='trademark') renderTrademark();
   if(page==='finance') renderFinance();
   if(page==='learning') renderLearning();
+  if(page==='compare') renderCompare();
   if(page==='proxy') renderProxy();
   if(page==='settings') renderSettingsHistory();
 }
@@ -1420,6 +1421,48 @@ function showToast(msg){
   var t=document.createElement('div');t.className='toast';t.textContent=msg;document.body.appendChild(t);
   setTimeout(function(){t.remove()},2500);
 }
+
+// ========== I: 多人协作对比分析 ==========
+function renderCompare(){
+  fetch(API_BASE+'/api/merge-training')
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d||!d.users||!d.users.length){document.getElementById('compareStats').innerHTML='<div class="stat-card"><div class="icon blue">📊</div><div class="info"><div class="num">0</div><div class="label">暂无用户数据</div></div></div>';return;}
+      var users=d.users;
+      document.getElementById('compareStats').innerHTML=
+        '<div class="stat-card"><div class="icon blue">👥</div><div class="info"><div class="num">'+users.length+'</div><div class="label">活跃用户</div></div></div>'+
+        '<div class="stat-card"><div class="icon green">📦</div><div class="info"><div class="num">'+d.total+'</div><div class="label">总选品数</div></div></div>'+
+        '<div class="stat-card"><div class="icon purple">🎯</div><div class="info"><div class="num">'+Math.round(d.total/Math.max(1,users.length))+'</div><div class="label">人均选品</div></div></div>';
+
+      // Per-user table
+      var totalKept=0,totalAll=0;
+      var tbody=document.querySelector('#compareTable tbody');
+      tbody.innerHTML=users.map(function(u){
+        var kept=u.products?u.products.filter(function(p){return p.selected||(p.tmSt!=='1');}).length:0; // not trademarked = keep candidate
+        var brands={};u.products.forEach(function(p){var b=p.brand||'unknown';brands[b]=(brands[b]||0)+1;});
+        var topBrand=Object.keys(brands).sort(function(a,b){return brands[b]-brands[a];})[0]||'-';
+        var retained=u.count>0?Math.round(kept/u.count*100):0;
+        totalKept+=kept;totalAll+=u.count;
+        return '<tr><td>'+u.user.replace('selections_','')+'</td><td>'+u.count+'</td><td>'+retained+'%</td><td>'+(u.products[0]?catForC(u.products[0]):'-')+'</td><td>'+topBrand+'</td><td>'+Math.round((u.products.reduce(function(s,p){return s+(p.score||0);},0)/Math.max(1,u.count))*10)/10+'</td><td>--</td></tr>';
+      }).join('');
+
+      // Category cross-comparison
+      var cats={};users.forEach(function(u){u.products.forEach(function(p){var c=catForC(p);if(!cats[c])cats[c]={total:0,kept:0};cats[c].total++;if(!p.tmSt||p.tmSt!=='1')cats[c].kept++;});});
+      var catTbody=document.querySelector('#compareCatTable tbody');
+      catTbody.innerHTML=Object.keys(cats).map(function(c){
+        var consensus=Math.round(cats[c].kept/Math.max(1,cats[c].total)*100);
+        return '<tr><td>'+c+'</td><td>'+cats[c].total+'</td><td>'+cats[c].kept+'</td><td>'+consensus+'%</td><td>'+(consensus>70?'高共识':(consensus>40?'中等':'分歧大'))+'</td></tr>';
+      }).join('');
+
+      // Weight convergence
+      var wh=(d.weightHistory||[]).slice(-10);
+      var wTbody=document.querySelector('#compareWeightTable tbody');
+      wTbody.innerHTML=wh.length?wh.map(function(h){var w=h.w||h.weights||{};return'<tr><td>'+h.ts+'</td><td>'+w.price+'%</td><td>'+w.demand+'%</td><td>'+w.competition+'%</td><td>'+w.brand+'%</td><td>'+w.safety+'%</td><td>'+w.social+'%</td><td>'+(h.source||'plugin')+'</td></tr>';}).join(''):'<tr><td colspan="8" style="text-align:center;color:#999">等待数据积累...</td></tr>';
+    })
+    .catch(function(){document.getElementById('compareStats').innerHTML='<div class="stat-card"><div class="icon red">❌</div><div class="info"><div class="num">离线</div><div class="label">后端不可达</div></div></div>';});
+}
+
+function catForC(p){var t=(p.title||'').toLowerCase();if(/racket|ball|yoga|swim|dumbbell|bike|skate|tent|camping|fitness|sport|exercise|running/i.test(t))return'运动户外';if(/shirt|pant|jacket|dress|bra|sock|hat|shoe|boot|belt|bag|backpack/i.test(t))return'服装纺织';if(/charger|cable|speaker|headphone|phone|battery|lamp|camera/i.test(t))return'电子配件';if(/ring|necklace|bracelet|earring|pendant|watch|gold|silver/i.test(t))return'珠宝首饰';if(/toy|doll|puzzle|game|lego|plush/i.test(t))return'玩具';return'家居/其他';}
 
 // ========== 代理网络 ==========
 function renderProxy(){
