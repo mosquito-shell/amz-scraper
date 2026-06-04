@@ -38,6 +38,20 @@ function calcSalesByInventory(p){
 }
 function logStock(asin,stock){if(!STOCK_LOG[asin])STOCK_LOG[asin]=[];STOCK_LOG[asin].push({ts:Date.now(),stock:stock||0});if(STOCK_LOG[asin].length>30)STOCK_LOG[asin]=STOCK_LOG[asin].slice(-30);localStorage.setItem('amz_stock_log',JSON.stringify(STOCK_LOG));}
 
+// PRD 算法1: BSR排名 → 月销量推算
+function bsrToMonthly(p){
+  var r=parseInt(p.bsr||'0');if(!r||r<=0){var bsrArr=p.bsr;if(Array.isArray(bsrArr)&&bsrArr.length)r=parseInt(String(bsrArr[0].rank||'').replace(/,/g,''))||0;}
+  if(!r||r<=0)return null;
+  // 品类系数
+  var t=(p.title||'').toLowerCase();var coeff=1.0;
+  if(/clothing|shoes|jewelry|服饰|珠宝/i.test(t))coeff=1.3;
+  if(/sports|outdoor|运动|户外/i.test(t))coeff=0.8;
+  if(/electronic|kindle|phone|电子/i.test(t))coeff=0.6;
+  var est=Math.round(coeff*1000000/Math.pow(r,0.9));
+  if(isNaN(est))return null;
+  return est>=1000?Math.round(est/100)*100:est>=100?Math.round(est/10)*10:est;
+}
+
 var API_BASE=localStorage.getItem('amz_api_base')||'https://api.tsscjn.top';
 
 // === HS编码推荐引擎 (100+条目, 含美国进口关税) ===
@@ -188,6 +202,7 @@ function save(){localStorage.setItem('amz_product_tags',JSON.stringify(wbTags));
 function mergeProducts(target,sauce){var seen={};target.forEach(function(x){seen[x.asin]=true;});var added=0;sauce.forEach(function(x){if(!seen[x.asin]){seen[x.asin]=true;target.push(x);added++;}});return added;}
 function deleteProduct(list,asin,prefix){for(var i=list.length-1;i>=0;i--){if(list[i].asin===asin){list.splice(i,1);break;}}save();rWB(list,prefix+'-wb-table',prefix+'-wb-count',prefix);}
 function clearProducts(list,prefix){list.length=0;save();rWB(list,prefix+'-wb-table',prefix+'-wb-count',prefix);document.getElementById(prefix+'-workbench').style.display='none';}
+function selectAllWB(pfx){var prods=pfx==='ex'?exProducts:fsProducts;prods.forEach(function(p){wbChecked[p.asin]=true;});rWB(prods,pfx+'-wb-table',pfx+'-wb-count',pfx);}
 function restoreWorkbench(prefix){var list=prefix==='ex'?exProducts:fsProducts;if(list.length){document.getElementById(prefix+'-workbench').style.display='';rWB(list,prefix+'-wb-table',prefix+'-wb-count',prefix);}}
 
 // Category detection → per-category weight lookup
@@ -244,12 +259,15 @@ function rWB(prods,tid,cid,pfx){
     var nt=(wbNotes[p.asin]||'').substr(0,10);var tmr=tm(p.brand);var tc=tmr==='1'?'color:#cf1322':(tmr==='0'?'color:#389e0d':'color:#d48806');
     var cl=(p.score||0)>=70?'background:#d4edda':((p.score||0)>=50?'background:#fffbe6':'background:#f8d7da');
     var img=p.image||'';if(img.startsWith('//'))img='https:'+img;var ic=img?'<img src="'+img+'" width="32" height="32" style="object-fit:contain;border-radius:3px" onerror="this.onerror=null;this.parentNode.textContent=\'📷\'">':'';
-    // B: 库存监控销量
+    // B: BSR推算 + 库存监控 双算法销量
+    var bsrSales=bsrToMonthly(p);
     var invSales=calcSalesByInventory(p);if(p.stock!==undefined)logStock(p.asin,p.stock);
-    var invTxt=invSales?'<br><span style="font-size:8px;color:#52c41a">🟢'+invSales+'/月</span>':'';
+    var salesTxt='';if(bsrSales)salesTxt=bsrSales+' (BSR)';if(invSales)salesTxt+=(salesTxt?' | ':'')+invSales+' (库存)';
+    // Use BSR estimate as p.monthly for scoring if no Amazon monthly data
+    if(!p.monthly&&bsrSales)p.monthly=bsrSales;
     var lk=p.link||('https://www.amazon.com/dp/'+p.asin);
     var tr=document.createElement('tr');tr.style.cssText=cl+';border-bottom:1px solid #f0f0f0';tr.setAttribute('draggable','true');tr.dataset.asin=p.asin;
-    tr.innerHTML='<td style="cursor:grab;text-align:center;color:#ccc">+</td><td><input type="checkbox" '+ch+'></td><td style="text-align:center">'+ic+'</td><td style="font-size:9px">'+p.asin+'</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(p.title||'').replace(/"/g,'&quot;')+'">'+(p.title||'')+'</td><td style="font-size:10px">'+(p.brand||'--')+'</td><td>'+(p.price?'$'+p.price:'--')+'</td><td style="font-weight:bold;'+tc+'">'+tmr+'</td><td style="font-weight:bold">'+(p.score||'--')+'</td><td style="cursor:pointer;text-align:center;font-size:14px">'+th+'</td><td style="font-size:9px;color:#888">'+nt+'</td><td style="font-size:9px"><a href="'+lk+'" target="_blank" style="color:#1677ff">link</a></td><td style="text-align:center;cursor:pointer;color:#ccc;font-size:16px" title="删除此条" class="wb-del">×</td>';
+    tr.innerHTML='<td style="cursor:grab;text-align:center;color:#ccc">+</td><td><input type="checkbox" '+ch+'></td><td style="text-align:center">'+ic+'</td><td style="font-size:9px">'+p.asin+'</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(p.title||'').replace(/"/g,'&quot;')+'">'+(p.title||'')+'</td><td style="font-size:10px">'+(p.brand||'--')+'</td><td>'+(p.price?'$'+p.price:'--')+'</td><td style="font-weight:bold;'+tc+'">'+tmr+'</td><td style="font-weight:bold">'+(p.score||'--')+(invSales||bsrSales?'<span style="color:#52c41a;font-size:7px" title="BSR推算:'+(bsrSales||'N/A')+' | 库存:'+(invSales||'N/A')+' | Amazon:'+(p.monthly||'N/A')+'">📊</span>':'')+'</td><td style="cursor:pointer;text-align:center;font-size:14px">'+th+'</td><td style="font-size:9px;color:#888">'+nt+'</td><td style="font-size:9px"><a href="'+lk+'" target="_blank" style="color:#1677ff">link</a></td><td style="text-align:center;cursor:pointer;color:#ccc;font-size:16px" title="删除此条" class="wb-del">×</td>';
     var hsc=hsFor(p);var hsTd=document.createElement('td');hsTd.style.cssText='font-size:9px;color:#722ed1;cursor:pointer';hsTd.title=hsc.name+' | 关税 '+hsc.tariff+'%';hsTd.textContent=hsc.code;hsTd.addEventListener('dblclick',function(){var c=wbHS[p.asin]?wbHS[p.asin].code:hsc.code;var inp=prompt('HS编码(手动输入):',c);if(inp===null)return;wbHS[p.asin]={code:inp.trim(),name:hsc.name,tariff:hsc.tariff,_manual:true,_brand:(p.brand||'').toLowerCase().trim()};saveCorrection(p.brand,'hsCode',inp.trim());hsSave();rWB(prods,tid,cid,pfx);});tr.appendChild(hsTd);
     tr.querySelector('input[type=checkbox]').addEventListener('change',function(){wbChecked[p.asin]=this.checked;});
     var tds=tr.querySelectorAll('td');tds[9].addEventListener('click',function(){var cy=['','priority','maybe','reject'];var c=wbTags[p.asin]||'';var n=cy[(cy.indexOf(c)+1)%4];wbTags[p.asin]=n;if(!n)delete wbTags[p.asin];save();rWB(prods,tid,cid,pfx);});
@@ -414,7 +432,7 @@ chrome.runtime.onMessage.addListener(function(msg){
   }
   if(msg.type==='export-done'){
     var products=msg.products||[];
-    products.forEach(function(p){sc(p);});
+    products.forEach(function(p){sc(p);if(p.stock!==undefined&&p.stock)logStock(p.asin,p.stock);});
     products.sort(function(a,b){return(b.score||0)-(a.score||0)});
     var added=mergeProducts(exProducts,products);
     var pb3=document.getElementById('ex-progress');if(pb3)pb3.style.display='none';
@@ -432,7 +450,7 @@ chrome.runtime.onMessage.addListener(function(msg){
   }
   if(msg.type==='fission-done'){
     var fsProds=msg.products||[];
-    fsProds.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);});
+    fsProds.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);if(p.stock!==undefined&&p.stock)logStock(p.asin,p.stock);});
     var tmEl=document.querySelector('input[name="fs-tm"]:checked');var tmVal=tmEl?tmEl.value:'all';
     var salesMin=parseInt(document.getElementById('fs-sales-min').value)||0;
     var salesMaxV=parseInt(document.getElementById('fs-sales-max').value)||0;
