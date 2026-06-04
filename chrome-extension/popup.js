@@ -12,6 +12,32 @@ var W=JSON.parse(localStorage.getItem('amz_weights')||'{"price":20,"demand":25,"
 var CW=JSON.parse(localStorage.getItem('amz_cat_weights')||'{"default":{"price":20,"demand":25,"competition":20,"brand":15,"safety":10,"social":10}}');
 var WH=JSON.parse(localStorage.getItem('amz_weights_history')||'[]');
 var TM_CACHE={};try{TM_CACHE=JSON.parse(localStorage.getItem('amz_tm_cache')||'{}');}catch(e){}
+// Upgrade old 0/1 cache entries to {v,expires} format
+Object.keys(TM_CACHE).forEach(function(k){if(typeof TM_CACHE[k]!=='object'){TM_CACHE[k]={v:TM_CACHE[k]?1:0,ts:Date.now()-86400000,expires:Date.now()+315360000000};}});
+
+// TM 10年TTL查询
+function tmGet(b){var e=TM_CACHE[b];if(!e||typeof e!=='object')return null;if(Date.now()>e.expires){delete TM_CACHE[b];return null;}return e.v;}
+
+function tmSet(brand,val){
+  var k=(brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').toLowerCase().trim();
+  TM_CACHE[k]={v:val?1:0,ts:Date.now(),expires:Date.now()+315360000000}; // 10年
+  save();
+}
+
+// 库存监控 (PRD 算法2)
+var STOCK_LOG={};try{STOCK_LOG=JSON.parse(localStorage.getItem('amz_stock_log')||'{}');}catch(e){}
+function calcSalesByInventory(p){
+  var log=STOCK_LOG[p.asin]||[];
+  if(log.length<2)return null; // need 2+ samples
+  log.sort(function(a,b){return b.ts-a.ts;});
+  var latest=log[0],oldest=log[log.length-1];
+  var days=(latest.ts-oldest.ts)/86400000;
+  if(days<1)return null;
+  var delta=Math.max(0,(oldest.stock||0)-(latest.stock||0));
+  return Math.round(delta/days*30); // project to monthly
+}
+function logStock(asin,stock){if(!STOCK_LOG[asin])STOCK_LOG[asin]=[];STOCK_LOG[asin].push({ts:Date.now(),stock:stock||0});if(STOCK_LOG[asin].length>30)STOCK_LOG[asin]=STOCK_LOG[asin].slice(-30);localStorage.setItem('amz_stock_log',JSON.stringify(STOCK_LOG));}
+
 var API_BASE=localStorage.getItem('amz_api_base')||'https://api.tsscjn.top';
 
 // === HS编码推荐引擎 (100+条目, 含美国进口关税) ===
@@ -167,7 +193,7 @@ function wFor(p){
   return CW['default']||W;
 }
 var TM={yonex:1,anker:1,wilson:1,baden:1,eastpoint:1,senston:1,hiraliy:1,vevor:1,boulder:1,franklin:1,keehoo:1,eagles:1,abovegenius:1,zdgao:1,nike:1,adidas:1,lululemon:1,heynuts:1,sunzel:1,colorfulkoala:1,automet:1,iuga:1,swarovski:1,pandora:1,pavoi:1,dearmay:1,gokeey:1,fancime:1,beriso:1,apple:1,samsung:1,sony:1,bose:1,jbl:1,levi:1,hanes:1,gildan:1,champion:1,puma:1,reebok:1,asics:1,mizuno:1,fila:1,columbia:1,carhartt:1,dickies:1,timex:1,casio:1,lego:1,mattel:1,hasbro:1,nerf:1,disney:1,marvel:1,nintendo:1,phiniix:1,wettarn:1,meooeck:1,aoneky:1,haokelball:1,spalding:1,mikasa:1};
-function tm(b){if(!b)return'0';var k=b.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').toLowerCase().trim();if(k==='generic'||k==='from the author')return'0';if(TM_CACHE[k]!==undefined)return TM_CACHE[k]?'1':'0';if(TM[k]!==undefined)return TM[k]?'1':'0';return'?';}
+function tm(b){if(!b)return'0';var k=b.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').toLowerCase().trim();if(k==='generic'||k==='from the author')return'0';var c=tmGet(k);if(c!==null)return c?'1':'0';if(TM[k]!==undefined)return TM[k]?'1':'0';return'?';}
 function sc(p){var pr=parseFloat(p.price)||0,rv=parseInt(p.reviews)||0,rt=parseFloat(p.rating)||0,br=parseInt(p.bsr)||999999;var ps=pr<6?15:pr<12?60:pr<=25?95:pr<=40?85:pr<=70?60:pr<=120?40:15;var ds=br<500?98:br<2000?90:br<5000?80:br<10000?65:br<30000?45:br<50000?30:br<100000?15:5;var cs=rv<30?90:rv<100?85:rv<500?80:rv<2000?60:rv<5000?40:rv<15000?20:5;var t=tm(p.brand);var bs=(t==='0'||t==='?')?90:(t==='1'?30:70);var ss=rt?Math.min(100,rt*15+(rv>100?10:0)+(rv>1000?10:0)):40;var w=wFor(p);p._cat=catFor(p);p.score=Math.round((ps*(w.price||20)+ds*(w.demand||25)+cs*(w.competition||20)+bs*(w.brand||15)+ss*(w.safety||10)+ss*(w.social||10))/10)/10;p.tmSt=t;p.lv=p.score>=80?'强推':p.score>=70?'推荐':p.score>=60?'可试':p.score>=50?'谨慎':'不推';}
 // === 启动时自动从后端拉取最新权重 + 商标共享缓存 ===
 fetch(API_BASE+'/api/weights',{method:'GET'}).then(function(r){return r.json();}).then(function(d){
@@ -247,7 +273,19 @@ function ltr(prods,pfx){
   localStorage.setItem('amz_weights_synced',JSON.stringify(W));localStorage.setItem('amz_weights_synced_time',new Date().toISOString());
   var syncP={weights:W,history:[{time:new Date().toISOString().slice(0,16).replace('T',' '),old:JSON.parse(JSON.stringify(W)),new:nw,acc:acc,kept:kp.length,total:prods.length}],source:'plugin'};
   fetch(API_BASE+'/api/weights',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(syncP)}).catch(function(){});
-  alert('LTR Done! Acc:'+acc+'% '+(acc>=85?'PASS':'<85%')+' | '+kp.length+'/'+prods.length+' kept'+(acc>=85?' | Synced':''));
+  // PRD 4: 字段修正学习 — 从备注中提取关键词调整权重
+  var ntKey={price:0,demand:0,competition:0,brand:0,safety:0};var ntTotal=0;
+  kp.forEach(function(p){var n=(wbNotes[p.asin]||'').toLowerCase();if(!n)return;
+    if(/便宜|价低|price|cost/i.test(n)){ntKey.price+=0.5;ntTotal++;}
+    if(/销量|好卖|热销|demand|sell/i.test(n)){ntKey.demand+=1;ntTotal++;}
+    if(/竞争|竞品|compet/i.test(n)){ntKey.competition+=0.5;ntTotal++;}
+    if(/品牌|brand/i.test(n)){ntKey.brand+=0.5;ntTotal++;}
+    if(/太重|体积|大|尺寸|weight|large|dimens/i.test(n)){ntKey.safety+=1;ntTotal++;}
+    if(/关税|tariff|HS|编码|custom/i.test(n)){ntKey.safety+=0.5;ntTotal++;}
+  });
+  if(ntTotal>0){Object.keys(ntKey).forEach(function(k){nw[k]=Math.round(nw[k]+ntKey[k]*2);});var ntw=0;Object.keys(nw).forEach(function(k){ntw+=nw[k];});Object.keys(nw).forEach(function(k){nw[k]=Math.round(nw[k]/ntw*100);});var nta=100-Object.values(nw).reduce(function(a,b){return a+b},0);nw[Object.keys(nw)[0]]+=nta;}
+
+  alert('LTR Done! Acc:'+acc+'% '+(acc>=85?'PASS':'<85%')+' | '+kp.length+'/'+prods.length+' kept'+(acc>=85?' | Synced':'')+(ntTotal>0?' | Dict('+ntTotal+')':''));
   prods.forEach(function(p){sc(p);});prods.sort(function(a,b){return(b.score||0)-(a.score||0);});rWB(prods,pfx+'-wb-table',pfx+'-wb-count',pfx);
 }
 
@@ -288,7 +326,7 @@ function checkTrademarks(prods,pfx){
         var toCache={};
         if(results){Object.keys(results).forEach(function(brand){
           var k=brand.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').toLowerCase().trim();
-          if(k&&results[brand]&&results[brand].registered!==undefined){TM_CACHE[k]=results[brand].registered;toCache[brand]=results[brand].registered;}
+          if(k&&results[brand]&&results[brand].registered!==undefined){tmSet(brand,results[brand].registered);toCache[brand]=results[brand].registered;}
         });save();}
 
         // Step 3: Upload to shared cache (best effort)
@@ -305,7 +343,7 @@ function checkTrademarks(prods,pfx){
       chrome.runtime.sendMessage({action:'checkTrademarksBatch',brands:brands},function(results){
         if(results){Object.keys(results).forEach(function(brand){
           var k=brand.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').toLowerCase().trim();
-          if(k&&results[brand]&&results[brand].registered!==undefined)TM_CACHE[k]=results[brand].registered;
+          if(k&&results[brand]&&results[brand].registered!==undefined)tmSet(brand,results[brand].registered);
         });save();}
         prods.forEach(function(p){sc(p);});prods.sort(function(a,b){return(b.score||0)-(a.score||0);});rWB(prods,pfx+'-wb-table',pfx+'-wb-count',pfx);
         if(st)st.textContent='TM Check Done!';
@@ -379,12 +417,14 @@ chrome.runtime.onMessage.addListener(function(msg){
     var bestsellerOnly=document.getElementById('fs-bestseller').checked;
     var shipCbs=document.querySelectorAll('input[name="fs-ship"]:checked');var shipFilters=[];
     shipCbs.forEach(function(cb){shipFilters.push(cb.value);});
+    var sellerMin=parseInt(document.getElementById('fs-seller-min').value)||0;
     var filtered=fsProds.filter(function(p){
       if(filterOfficial&&/^amazon/i.test(p.brand||''))return false;
       if(shipFilters.length&&shipFilters.indexOf(p.shipping||'')<0)return false;
       var ms=parseInt(p.monthly)||0;if(salesMin>0&&ms<salesMin)return false;if(salesMaxV>0&&ms>salesMaxV)return false;
       if(tmVal==='yes'&&tm(p.brand)!=='1')return false;if(tmVal==='no'&&tm(p.brand)!=='0')return false;
-      if(bestsellerOnly&&!(p.bs||0))return false;return true;
+      if(bestsellerOnly&&!(p.bs||0))return false;
+      if(sellerMin>0&&(p._sellerCount||0)<sellerMin)return false;return true;
     });
     filtered.sort(function(a,b){return(b.score||0)-(a.score||0)});
     var added=mergeProducts(fsProducts,filtered);
@@ -460,5 +500,15 @@ document.getElementById('fs-create').addEventListener('click',function(){
   };
   chrome.runtime.sendMessage({action:'startFission',seed:seed,target:target,filters:filters,tabId:activeTabId});
 });
+
+// === PRD 6: 每日定时自动上传 ===
+var lastAutoUpload=parseInt(localStorage.getItem('amz_last_auto_upload')||'0');
+setInterval(function(){
+  var now=Date.now();
+  if(now-lastAutoUpload>86400000){
+    var all=exProducts.concat(fsProducts);
+    if(all.length){uploadToBackend(all,'auto');lastAutoUpload=now;localStorage.setItem('amz_last_auto_upload',String(now));}
+  }
+},3600000); // check every hour
 
 })();

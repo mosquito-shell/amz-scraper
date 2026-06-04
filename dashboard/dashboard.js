@@ -1604,5 +1604,6 @@ function refreshIPPool(){
   }).catch(function(){});
 }
 
+// IP pool loaded from backend API + proxy status
 // Boot
 init();

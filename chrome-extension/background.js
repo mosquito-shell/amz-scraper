@@ -163,7 +163,8 @@ function startExport(count, sender) {
           weight: (dd && dd.weight) || '',
           dims: (dd && dd.dimensions_cm ? Math.round(dd.dimensions_cm.length) + 'x' + Math.round(dd.dimensions_cm.width) + 'x' + Math.round(dd.dimensions_cm.height) : ''),
           bsr: (dd && dd.bsr) ? (dd.bsr[0] ? dd.bsr[0].rank : '') : ((prods[exportDone].bsr || [])[0] ? ((prods[exportDone].bsr || [])[0].rank || '') : ''),
-          monthly: prods[exportDone].monthly || ''
+          monthly: prods[exportDone].monthly || '',
+          stock: (dd&&dd.stock)||0, sellerCount: (dd&&dd.sellerCount)||0
         });
         exportDone++;
         notifyPopup({ type: 'export-progress', msg: 'Enrich ' + exportDone + '/' + exportTotal, done: exportDone, total: exportTotal, pct: 5 + Math.round(exportDone / exportTotal * 90) });
@@ -228,7 +229,9 @@ function fd(asin, cb) {
     var kw = ''; if (t) { var wds = t.split(/\s+/).filter(function(w) { return w.length > 4 }); kw = wds.slice(0, 3).join(' '); }
     if (br && br.length > 1 && br !== 'Generic' && !kw) kw = br;
     br = br.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi, '').trim();
-    cb({ asin: asin, title: t, brand: br, price: pr, rating: ra, reviews: rv, bsr: bs, weight: wt, dims: dm, monthly: mo, image: img, link: 'https://www.amazon.com/dp/' + asin, kw: kw, shipping: sh, bs: isBS });
+    var sc = 0, scM = h.match(/(\d+)\s*(?:new|other\s*seller|offer)/i) || h.match(/(\d+)\s*(?:from|seller)/i); if (scM) sc = parseInt(scM[1]) || 0;
+    var stk = 0, stkM = h.match(/In Stock[^0-9]*(\d+)/i) || h.match(/(\d+)\s*(?:left|remain)/i); if (stkM) stk = parseInt(stkM[1]) || 0;
+    cb({ asin: asin, title: t, brand: br, price: pr, rating: ra, reviews: rv, bsr: bs, weight: wt, dims: dm, monthly: mo, image: img, link: 'https://www.amazon.com/dp/' + asin, kw: kw, shipping: sh, bs: isBS, sellerCount: sc, stock: stk });
   });
 }
 

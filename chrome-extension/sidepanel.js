@@ -11,6 +11,9 @@ var TMBuiltin={};
 (function(){var s='yonex anker wilson baden eastpoint senston hiraliy vevor boulder franklin keehoo eagles abovegenius zdgao phiniix bheop haokelball wettarn meooeck aoneky nike adidas lululemon heynuts sunzel colorfulkoala automet iuga swarovski pandora pavoi dearmay gokeey fancime beriso apple samsung sony bose jbl levi hanes gildan champion puma reebok asics mizuno fila head prince dunlop carlton victor lining spalding rawlings easton mikasa speedo arena coleman columbia salomon merrell keen teva crocs levis lee wrangler carhartt dickies guess fossil timex casio lacoste jansport herschel osprey thule yeti contigo nalgene stanley thermos swell bic pilot pentel zebra lego mattel hasbro nerf barbie disney marvel pokemon nintendo oakley rayban dyson shark hoover patagonia';s.split(' ').forEach(function(b){TMBuiltin[b]='1';});['franklin sports','triumph sports','eastpoint sports','park & sun sports','outdoor games','joy spot!','peak fits','the gym people','crz yoga','90 degree by reflex','leggings depot','kendra scott','amazon basics','fruit of the loom','under armour','new balance','north face','calvin klein','tommy hilfiger','ralph lauren','michael kors','kate spade','tory burch','vera bradley','hydro flask','tag heuer','star wars','fisher-price','uni-ball','helly hansen','dr martens','ozark trail','birkenstock','timberland','wolverine','seiko','citizen','tissot','rolex','omega','cartier','tiffany','underarmour','google','microsoft','lg','marmot','kelty','3m','scotch','duck','gorilla','elmers','whirlpool','ge','bissell','camelbak','swell','bubba','owala','sharpie','oceanic','cressi','tyr','finis','tachikara','colorfulkoala','eastpoint sports'].forEach(function(b){TMBuiltin[b]='1';});})();
 function lookupTM(brand){if(!brand)return'0';var k=brand.toLowerCase().trim();if(k==='generic'||k==='from the author'||k==='n/a')return'0';if(TMBuiltin[k])return'1';return'?';}
 var tmCache={};try{tmCache=JSON.parse(localStorage.getItem('amz_tm_cache')||'{}');}catch(e){}
+Object.keys(tmCache).forEach(function(k){if(typeof tmCache[k]!=='object'){tmCache[k]={v:tmCache[k]?1:0,ts:Date.now()-86400000,expires:Date.now()+315360000000};}});
+function tmGet(b){var e=tmCache[b];if(!e||typeof e!=='object')return null;if(Date.now()>e.expires){delete tmCache[b];return null;}return e.v;}
+function tmSet(brand,val){var k=(brand||'').toLowerCase().trim();tmCache[k]={v:val?1:0,ts:Date.now(),expires:Date.now()+315360000000};localStorage.setItem('amz_tm_cache',JSON.stringify(tmCache));}
 
 function doTrademark(){
   var unknown=allProducts.filter(function(p){return p._tm==='?'||p._tm===undefined;});
@@ -21,9 +24,9 @@ function doTrademark(){
   chrome.runtime.sendMessage({action:'checkTrademarksBatch',brands:brands},function(results){
     if(results){Object.keys(results).forEach(function(brand){
       var k=brand.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').toLowerCase().trim();
-      if(k&&results[brand]&&results[brand].registered!==undefined){tmCache[k]=results[brand].registered?1:0;localStorage.setItem('amz_tm_cache',JSON.stringify(tmCache));}
+      if(k&&results[brand]&&results[brand].registered!==undefined){tmSet(brand,results[brand].registered);}
     });}
-    allProducts.forEach(function(p){var k=(p.brand||'').toLowerCase().trim();if(tmCache[k]!==undefined)p._tm=tmCache[k]?'1':'0';else p._tm=lookupTM(p.brand);});
+    allProducts.forEach(function(p){var k=(p.brand||'').toLowerCase().trim();var c=tmGet(k);if(c!==null)p._tm=c?'1':'0';else p._tm=lookupTM(p.brand);});
     scoreAll(allProducts);applyFilter();renderTable();
   });
 }

@@ -92,6 +92,14 @@ body{width:720px;min-height:520px;font:13px/1.5 -apple-system,BlinkMacSystemFont
     <label class="opt"><input type="checkbox" id="fs-bestseller"><span>仅抓取详情页含 Best Seller 标识的商品</span></label>
   </div>
 
+  <div class="group"><div class="group-title">跟卖店铺数</div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;color:#666">≥</span>
+      <input type="number" id="fs-seller-min" placeholder="最小跟卖数" value="" style="flex:1;padding:5px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:12px">
+      <span style="font-size:10px;color:#999">留空=不限制</span>
+    </div>
+  </div>
+
   <div class="group"><div class="group-title">配送方式</div>
     <div class="grid2">
       <label class="opt"><input type="checkbox" name="fs-ship" value="FBA" checked><span>亚马逊物流(FBA)</span></label>
