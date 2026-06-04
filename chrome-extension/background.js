@@ -177,30 +177,23 @@ function startExport(count, sender) {
 
     function nx() {
       if (!exportRunning || exportDone >= exportTotal) {
-        var waited = 0;
-        function waitFinish() {
-          if (exportProducts.length >= exportTotal || waited > 15) {
-            notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
-            exportRunning = false; return;
-          }
-          waited++; setTimeout(waitFinish, 1000);
-        }
-        waitFinish(); return;
+        notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
+        exportRunning = false; return;
       }
       var idx = exportDone; exportDone++;
-      var asin = prods[idx].asin;
-      var pushed = false;
-      chrome.tabs.sendMessage(exportTab, { action: 'getDetail', asin: asin }, function(dd) {
-        if (pushed) return; pushed = true;
+      var p = prods[idx];
+      // Use fd() directly — it goes through fetchSearch (12s timeout) and self-parses HTML
+      // No dependency on content.js getDetail callback
+      fd(p.asin, function(d) {
         exportProducts.push({
-          asin: asin, title: prods[idx].title || '',
-          brand: prods[idx].brand || '', link: 'https://www.amazon.com/dp/' + asin,
-          image: prods[idx].image_url || '', price: prods[idx].price_usd || '',
-          rating: prods[idx].rating || '', reviews: prods[idx].review_count || 0,
-          shipping: prods[idx]._shipping || '',
-          weight: (dd && dd.weight) || '', dims: (dd && dd.dimensions_cm ? Math.round(dd.dimensions_cm.length) + 'x' + Math.round(dd.dimensions_cm.width) + 'x' + Math.round(dd.dimensions_cm.height) : ''),
-          bsr: (dd && dd.bsr) ? (dd.bsr[0] ? dd.bsr[0].rank : '') : ((prods[idx].bsr || [])[0] ? ((prods[idx].bsr || [])[0].rank || '') : ''),
-          monthly: prods[idx].monthly || '', stock: (dd&&dd.stock)||0, sellerCount: (dd&&dd.sellerCount)||0
+          asin: p.asin, title: p.title || (d&&d.title) || '',
+          brand: p.brand || (d&&d.brand) || '', link: 'https://www.amazon.com/dp/' + p.asin,
+          image: p.image_url || (d&&d.image) || '', price: p.price_usd || (d&&d.price) || '',
+          rating: p.rating || (d&&d.rating) || '', reviews: p.review_count || (d&&d.reviews) || 0,
+          shipping: p._shipping || (d&&d.shipping) || '',
+          weight: (d && d.weight) || '', dims: (d && d.dims) || '',
+          bsr: (d && d.bsr) || ((p.bsr || [])[0] ? ((p.bsr || [])[0].rank || '') : ''),
+          monthly: p.monthly || (d&&d.monthly) || '', stock: (d&&d.stock)||0, sellerCount: (d&&d.sellerCount)||0
         });
         notifyPopup({ type: 'export-progress', msg: 'Enrich ' + exportProducts.length + '/' + exportTotal, done: exportProducts.length, total: exportTotal, pct: 5 + Math.round(exportProducts.length / exportTotal * 90) });
       });
@@ -212,8 +205,9 @@ function startExport(count, sender) {
 
 // === 搜索页 fetch ===
 function sp(url, cb) {
-  if (!fissionActiveTab) { cb([]); return; }
-  chrome.tabs.sendMessage(fissionActiveTab, { action: 'fetchSearch', url: url }, function(r) {
+  var tab = fissionActiveTab || exportTab;
+  if (!tab) { cb([]); return; }
+  chrome.tabs.sendMessage(tab, { action: 'fetchSearch', url: url }, function(r) {
     if (r && r.success) {
       var a = exA(r.html);
       a.forEach(function(x) { fissionQueue.push(x); });
@@ -236,8 +230,9 @@ function exA(h) {
 
 // === 详情页 fetch ===
 function fd(asin, cb) {
-  if (!fissionActiveTab) { cb({ asin: asin, kw: 'related', link: 'https://www.amazon.com/dp/' + asin }); return; }
-  chrome.tabs.sendMessage(fissionActiveTab, { action: 'fetchSearch', url: 'https://www.amazon.com/dp/' + asin }, function(r) {
+  var tab = fissionActiveTab || exportTab;
+  if (!tab) { cb({ asin: asin, kw: 'related', link: 'https://www.amazon.com/dp/' + asin }); return; }
+  chrome.tabs.sendMessage(tab, { action: 'fetchSearch', url: 'https://www.amazon.com/dp/' + asin }, function(r) {
     if (!r || !r.success || !r.html || r.html.length < 5000) {
       cb({ asin: asin, kw: 'related', link: 'https://www.amazon.com/dp/' + asin });
       return;
