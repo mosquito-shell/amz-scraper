@@ -173,33 +173,34 @@ function startExport(count, sender) {
 
     function nx() {
       if (!exportRunning || exportDone >= exportTotal) {
-        if (exportRunning) notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
-        exportRunning = false; return;
+        var waited = 0;
+        function waitFinish() {
+          if (exportProducts.length >= exportTotal || waited > 15) {
+            notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
+            exportRunning = false; return;
+          }
+          waited++; setTimeout(waitFinish, 1000);
+        }
+        waitFinish(); return;
       }
-      var asin = prods[exportDone].asin;
-      var called = false;
+      var idx = exportDone; exportDone++;
+      var asin = prods[idx].asin;
+      var pushed = false;
       chrome.tabs.sendMessage(exportTab, { action: 'getDetail', asin: asin }, function(dd) {
-        if (called) return; called = true;
+        if (pushed) return; pushed = true;
         exportProducts.push({
-          asin: asin, title: prods[exportDone].title || '',
-          brand: prods[exportDone].brand || '', link: 'https://www.amazon.com/dp/' + asin,
-          image: prods[exportDone].image_url || '', price: prods[exportDone].price_usd || '',
-          rating: prods[exportDone].rating || '', reviews: prods[exportDone].review_count || 0,
-          shipping: prods[exportDone]._shipping || '',
-          weight: (dd && dd.weight) || '',
-          dims: (dd && dd.dimensions_cm ? Math.round(dd.dimensions_cm.length) + 'x' + Math.round(dd.dimensions_cm.width) + 'x' + Math.round(dd.dimensions_cm.height) : ''),
-          bsr: (dd && dd.bsr) ? (dd.bsr[0] ? dd.bsr[0].rank : '') : ((prods[exportDone].bsr || [])[0] ? ((prods[exportDone].bsr || [])[0].rank || '') : ''),
-          monthly: prods[exportDone].monthly || '',
-          stock: (dd&&dd.stock)||0, sellerCount: (dd&&dd.sellerCount)||0
+          asin: asin, title: prods[idx].title || '',
+          brand: prods[idx].brand || '', link: 'https://www.amazon.com/dp/' + asin,
+          image: prods[idx].image_url || '', price: prods[idx].price_usd || '',
+          rating: prods[idx].rating || '', reviews: prods[idx].review_count || 0,
+          shipping: prods[idx]._shipping || '',
+          weight: (dd && dd.weight) || '', dims: (dd && dd.dimensions_cm ? Math.round(dd.dimensions_cm.length) + 'x' + Math.round(dd.dimensions_cm.width) + 'x' + Math.round(dd.dimensions_cm.height) : ''),
+          bsr: (dd && dd.bsr) ? (dd.bsr[0] ? dd.bsr[0].rank : '') : ((prods[idx].bsr || [])[0] ? ((prods[idx].bsr || [])[0].rank || '') : ''),
+          monthly: prods[idx].monthly || '', stock: (dd&&dd.stock)||0, sellerCount: (dd&&dd.sellerCount)||0
         });
-        exportDone++;
-        notifyPopup({ type: 'export-progress', msg: 'Enrich ' + exportDone + '/' + exportTotal, done: exportDone, total: exportTotal, pct: 5 + Math.round(exportDone / exportTotal * 90) });
-        setTimeout(nx, 1500 + Math.random() * 1000);
+        notifyPopup({ type: 'export-progress', msg: 'Enrich ' + exportProducts.length + '/' + exportTotal, done: exportProducts.length, total: exportTotal, pct: 5 + Math.round(exportProducts.length / exportTotal * 90) });
       });
-      // Timeout: if getDetail doesn't respond in 8s, skip this ASIN
-      setTimeout(function(){
-        if (!called) { called = true; exportProducts.push({ asin: asin, title: prods[exportDone].title || '', brand: prods[exportDone].brand || '', link: 'https://www.amazon.com/dp/' + asin, image: prods[exportDone].image_url || '', price: prods[exportDone].price_usd || '', rating: prods[exportDone].rating || '', reviews: prods[exportDone].review_count || 0 }); exportDone++; notifyPopup({ type: 'export-progress', msg: 'Skip ' + exportDone + '/' + exportTotal + ' (timeout)', done: exportDone, total: exportTotal, pct: 5 + Math.round(exportDone / exportTotal * 90) }); setTimeout(nx, 500); }
-      }, 8000);
+      setTimeout(nx, 1800 + Math.random() * 1200);
     }
     nx();
   });

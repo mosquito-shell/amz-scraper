@@ -97,11 +97,14 @@
   // Global access for sidebar
   window.__amzProducts__ = extract;
 
-  // Fetch detail page (browser cookies, no CF Worker needed)
+  // Fetch detail page (browser cookies, no CF Worker needed) - with timeout+error protection
   window.__amzFetchDetail__ = function(asin, callback) {
+    var done = false;
+    var timer = setTimeout(function(){ if(!done){done=true;callback({err:'timeout',asin:asin});} }, 10000);
     fetch('https://www.amazon.com/dp/' + asin, { credentials: 'include', headers: { 'User-Agent': navigator.userAgent, 'Accept': 'text/html' } })
       .then(function(r) { return r.text(); })
       .then(function(html) {
+        if(done)return; clearTimeout(timer); done=true;
         if (!html || html.length < 8000) { callback({ err: 'blocked' }); return; }
         var result = {};
         // Weight & Dimensions (same as before)
