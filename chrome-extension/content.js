@@ -177,10 +177,12 @@
       sendResponse({});
     }
     if (request.action === 'fetchSearch') {
+      var done = false;
+      var t = setTimeout(function(){ if(!done){done=true;sendResponse({success:false,error:'timeout',html:''});} }, 12000);
       fetch(request.url, { credentials: 'include', headers: { 'User-Agent': navigator.userAgent, 'Accept': 'text/html' } })
         .then(function(r) { return r.text(); })
-        .then(function(html) { sendResponse({ success: true, html: html }); })
-        .catch(function(e) { sendResponse({ success: false, error: e.message }); });
+        .then(function(html) { if(done)return; clearTimeout(t); done=true; sendResponse({ success: true, html: html }); })
+        .catch(function(e) { if(done)return; clearTimeout(t); done=true; sendResponse({ success: false, error: e.message }); });
       return true;
     }
     return true;

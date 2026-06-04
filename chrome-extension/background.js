@@ -80,8 +80,11 @@ var fsProducts=[], fsSeenASIN={}, fsTarget=0, fsRunning=false, fsAllRawASINs=[];
 
 function startFission(seed, target, filters, sender){
   if(fsRunning)return;
-  fsRunning=true;fsProducts=[];fsSeenASIN={};fsTarget=target;fsAllRawASINs=[];
+  fsRunning=true;fsProducts=[];fsSeenASIN={};fsTarget=target;fsAllRawASINs=[];fsConsecutive=0;
   notifyPopup({type:'fission-progress',phase:'search',msg:'🔍 种子: '+seed+' | 0/'+target,pct:2});
+
+  // Global watchdog: force finish after 5 minutes
+  var watchdog=setTimeout(function(){if(fsRunning){fsRunning=false;finishFission();}},300000);
 
   // Step 1: Fetch seed detail first for keywords
   fd(seed,function(d){
@@ -101,46 +104,47 @@ function startFission(seed, target, filters, sender){
     return unique;
   }
 
-  // 搜索 → 抓ASIN → 提取关键词 → 搜索 → ... 直到采够
-  var usedKws={}, kv=0, consecutiveSkips=0;
+  // 搜索 → 抓ASIN → 补详情 → 循环
+  var usedKws={}, kv=0;
   function expandLoop(kws){
     if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
-    if(consecutiveSkips>8){finishFission();return;} // deadlock protection
+    if(fsConsecutive++>12){finishFission();return;}
 
     var kw=kws[kv++];if(!kw){kv=0;kw=kws[kv];}
-    if(!kw){finishFission();return;}
-    if(usedKws[kw]){consecutiveSkips++;setTimeout(function(){expandLoop(kws);},200);return;}
-    usedKws[kw]=true;consecutiveSkips=0;
+    if(!kw||usedKws[kw]){setTimeout(function(){expandLoop(kws);},200);return;}
+    usedKws[kw]=true;fsConsecutive=0;
 
     var url='https://www.amazon.com/s?k='+encodeURIComponent(kw);
     notifyPopup({type:'fission-progress',phase:'search',msg:'🔍 搜索: '+kw+' | '+fsProducts.length+'/'+fsTarget,pct:10+Math.round(fsProducts.length/fsTarget*20)});
 
     chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:url},function(sr){
-      if(!sr||!sr.success){setTimeout(function(){expandLoop(kws);},500);return;}
+      if(!sr||!sr.success){fsConsecutive++;setTimeout(function(){expandLoop(kws);},500);return;}
       var asins=exA(sr.html);
       var fresh=[];asins.forEach(function(a){if(!fsSeenASIN[a]){fsSeenASIN[a]=true;fresh.push(a);}});
-      fsAllRawASINs=fsAllRawASINs.concat(fresh);
+      if(!fresh.length){fsConsecutive++;setTimeout(function(){expandLoop(kws);},500);return;}
 
-      if(!fresh.length){consecutiveSkips++;setTimeout(function(){expandLoop(kws);},500);return;}
-
-      // Fetch details for fresh ASINs
-      var fi=0,maxFetch=Math.min(fresh.length,target-fsProducts.length+5);
+      var fi=0,maxFetch=Math.min(fresh.length,fsTarget-fsProducts.length+10);
       function fetchOne(){
         if(!fsRunning||fi>=maxFetch||fsProducts.length>=fsTarget){
-          // Add new keywords from recently fetched products
-          fsProducts.slice(-3).forEach(function(p){
+          fsProducts.slice(-5).forEach(function(p){
             var sub=extractKeywords(p);
             sub.forEach(function(w){if(!usedKws[w]){kws.push(w);}});
           });
           setTimeout(function(){expandLoop(kws);},300);return;
         }
-        fd(fresh[fi],function(d){
-          if(d&&d.title){fsProducts.push(d);}
-          fi++;
-          var pct=10+Math.round(fsProducts.length/fsTarget*85);
-          notifyPopup({type:'fission-progress',phase:'detail',msg:'📦 '+fsProducts.length+'/'+fsTarget+' products',pct:Math.min(pct,99)});
-          setTimeout(fetchOne,1500+Math.random()*1000);
-        });
+        var af=fresh[fi];fi++;
+        // Retry fd up to 2 times for network errors
+        var retry=0;
+        function doFd(){
+          fd(af,function(d){
+            if(d&&d.title){fsProducts.push(d);fsConsecutive=0;}
+            else if(!d||d.err||retry<1){retry++;setTimeout(doFd,2000);return;}
+            var pct=10+Math.round(fsProducts.length/fsTarget*85);
+            notifyPopup({type:'fission-progress',phase:'detail',msg:'📦 '+fsProducts.length+'/'+fsTarget+' products',pct:Math.min(pct,99)});
+            setTimeout(fetchOne,1500+Math.random()*1000);
+          });
+        }
+        doFd();
       }
       fetchOne();
     });
