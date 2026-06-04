@@ -167,33 +167,39 @@ function notifyPopup(data) {
 // === 类目导出 (后台运行, 不中断) ===
 function startExport(count, sender) {
   if (exportRunning) return;
-  exportRunning = true; exportProducts = []; exportTotal = count; exportDone = 0;
+  exportRunning = true; exportProducts = []; exportTotal = count; exportDone = 0; var exportSent = 0;
 
   chrome.tabs.sendMessage(exportTab, { action: 'scrape' }, function(r) {
     if (!r || !r.success) { notifyPopup({ type: 'export-progress', msg: 'Failed to scrape', done: 0, total: 0, pct: 0 }); exportRunning = false; return; }
     var prods = (r.products || []).slice(0, Math.min(count, r.products.length));
     exportTotal = prods.length;
-    notifyPopup({ type: 'export-progress', msg: 'Got ' + prods.length + '. Enriching...', done: 0, total: exportTotal, pct: 5 });
+    if (!exportTotal) { notifyPopup({ type: 'export-done', products: [], msg: '0 products found' }); exportRunning = false; return; }
+    notifyPopup({ type: 'export-progress', msg: 'Got ' + exportTotal + '. Enriching...', done: 0, total: exportTotal, pct: 5 });
 
     function nx() {
-      if (!exportRunning || exportDone >= exportTotal) {
-        notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
-        exportRunning = false; return;
+      if (!exportRunning || exportSent >= exportTotal) {
+        // Wait for pending callbacks (max 30s)
+        var waited = 0;
+        function checkDone() {
+          if (exportProducts.length >= exportTotal || waited > 30 || !exportRunning) {
+            notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
+            exportRunning = false; return;
+          }
+          waited++; setTimeout(checkDone, 1000);
+        }
+        checkDone(); return;
       }
-      var idx = exportDone; exportDone++;
-      var p = prods[idx];
-      // Use fd() directly — it goes through fetchSearch (12s timeout) and self-parses HTML
-      // No dependency on content.js getDetail callback
-      fd(p.asin, function(d) {
+      var idx = exportSent; exportSent++;
+      fd(prods[idx].asin, function(d) {
         exportProducts.push({
-          asin: p.asin, title: p.title || (d&&d.title) || '',
-          brand: p.brand || (d&&d.brand) || '', link: 'https://www.amazon.com/dp/' + p.asin,
-          image: p.image_url || (d&&d.image) || '', price: p.price_usd || (d&&d.price) || '',
-          rating: p.rating || (d&&d.rating) || '', reviews: p.review_count || (d&&d.reviews) || 0,
-          shipping: p._shipping || (d&&d.shipping) || '',
+          asin: prods[idx].asin, title: prods[idx].title || (d&&d.title) || '',
+          brand: prods[idx].brand || (d&&d.brand) || '', link: 'https://www.amazon.com/dp/' + prods[idx].asin,
+          image: prods[idx].image_url || (d&&d.image) || '', price: prods[idx].price_usd || (d&&d.price) || '',
+          rating: prods[idx].rating || (d&&d.rating) || '', reviews: prods[idx].review_count || (d&&d.reviews) || 0,
+          shipping: prods[idx]._shipping || (d&&d.shipping) || '',
           weight: (d && d.weight) || '', dims: (d && d.dims) || '',
-          bsr: (d && d.bsr) || ((p.bsr || [])[0] ? ((p.bsr || [])[0].rank || '') : ''),
-          monthly: p.monthly || (d&&d.monthly) || '', stock: (d&&d.stock)||0, sellerCount: (d&&d.sellerCount)||0
+          bsr: (d && d.bsr) || ((prods[idx].bsr || [])[0] ? ((prods[idx].bsr || [])[0].rank || '') : ''),
+          monthly: prods[idx].monthly || (d&&d.monthly) || '', stock: (d&&d.stock)||0, sellerCount: (d&&d.sellerCount)||0
         });
         notifyPopup({ type: 'export-progress', msg: 'Enrich ' + exportProducts.length + '/' + exportTotal, done: exportProducts.length, total: exportTotal, pct: 5 + Math.round(exportProducts.length / exportTotal * 90) });
       });
