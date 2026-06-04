@@ -133,6 +133,7 @@ input[type=text]:focus,input[type=url]:focus,input[type=number]:focus,select:foc
   <div class="topbar">
     <h2 id="pageTitle">📈 仪表盘</h2>
     <div class="actions">
+      <select id="batchFilter" onchange="filterByBatch(this.value)" style="padding:4px 8px;border-radius:4px;border:1px solid #d9d9d9;font-size:11px"><option value="">全部批次</option></select>
       <button class="btn btn-primary" onclick="refreshAll()">🔄 刷新数据</button>
       <button class="btn" onclick="syncFromBackend()" style="background:#722ed1;color:#fff">☁️ 从后端同步</button>
       <button class="btn btn-success" onclick="exportExcel()">📥 导出 Excel</button>

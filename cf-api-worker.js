@@ -98,12 +98,19 @@ async function handleRequest(request, env) {
     // ===== Products API =====
     if (path === '/api/products' && method === 'GET') {
       const data = await env.AMZ_DATA.get('products', 'json') || [];
-      // Clean brand names on output
-      const clean = data.map(function(p) {
+      const batchFilter = url.searchParams.get('batch');
+      const dateFilter = url.searchParams.get('date');
+      let filtered = data.map(function(p) {
         p.brand = (p.brand || '').replace(/Visit the /g, '').replace(/ Store$/g, '').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi, '').trim();
         return p;
       });
-      response = json(clean);
+      if(batchFilter) { filtered = filtered.filter(function(p){return p._batchId===batchFilter;}); }
+      if(dateFilter) { filtered = filtered.filter(function(p){return p._batchDate===dateFilter;}); }
+      // Return both filtered and metadata
+      const batches = {};
+      data.forEach(function(p){ var d=p._batchDate||'unknown'; batches[d]=(batches[d]||0)+1; });
+      response = json(filtered);
+      // Inject batch info via header
       return cors(request, response);
     }
 
@@ -113,15 +120,18 @@ async function handleRequest(request, env) {
       const existing = await env.AMZ_DATA.get('products', 'json') || [];
 
       if (body.products && Array.isArray(body.products)) {
-        // Deduplicate by ASIN
-        const seen = new Set(existing.map(p => p.asin));
-        const fresh = body.products.filter(p => !seen.has(p.asin));
-        const merged = [...existing, ...fresh];
-        // Cap at 5000 products
+        const today = new Date().toISOString().slice(0,10);
+        const batchId = body.batchId || ('batch_'+today+'_'+(body.source||'upload'));
+        body.products.forEach(function(p){ p._batchId = batchId; p._batchDate = today; });
+        // Upsert by ASIN (newer overwrites)
+        const asinMap = {};
+        existing.forEach(function(p){ asinMap[p.asin] = p; });
+        body.products.forEach(function(p){ asinMap[p.asin] = p; });
+        const merged = Object.values(asinMap);
         const trimmed = merged.slice(-5000);
         await env.AMZ_DATA.put('products', JSON.stringify(trimmed));
         await env.AMZ_DATA.put('last_products_update', new Date().toISOString());
-        response = json({ ok: true, total: trimmed.length, added: fresh.length });
+        response = json({ ok: true, total: trimmed.length, added: body.products.length, batchId: batchId });
       } else {
         response = json({ ok: false, error: 'no products array' }, 400);
       }

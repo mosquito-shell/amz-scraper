@@ -10,6 +10,36 @@ var WEIGHTS = JSON.parse(localStorage.getItem('amz_weights') || '{"price":20,"de
 var currentPage = 'dashboard';
 var fissionRunning = false;
 var API_BASE = 'https://api.tsscjn.top';
+var ALL_DATA = []; // unfiltered all products
+var BATCHES = {};   // {batchId: count}
+var currentBatch = '';
+var PROXY_IMG_BASE = 'https://proxy.tsscjn.top/?url=';
+
+// Batch filter
+function filterByBatch(bid){
+  currentBatch = bid;
+  if(bid){ DATA = ALL_DATA.filter(function(p){ return p._batchId===bid; }); }
+  else { DATA = ALL_DATA.slice(); }
+  scoreAll(DATA); renderCurrent();
+}
+
+function renderBatchSelector(){
+  var sel=document.getElementById('batchFilter');
+  if(!sel)return;
+  sel.innerHTML='<option value="">全部批次 ('+ALL_DATA.length+'件)</option>';
+  Object.keys(BATCHES).sort().reverse().forEach(function(b){
+    sel.innerHTML+='<option value="'+b+'"'+(currentBatch===b?' selected':'')+'>'+b+' ('+BATCHES[b]+'件)</option>';
+  });
+}
+
+// Helper: img tag with proxy + fallback
+function imgTag(url, w){
+  w=w||35;
+  if(!url) return '';
+  if(url.startsWith('//')) url='https:'+url;
+  var proxy=PROXY_IMG_BASE+encodeURIComponent(url);
+  return '<img src="'+proxy+'" width="'+w+'" style="object-fit:contain;border-radius:3px" onerror="this.onerror=null;this.parentNode.innerHTML=\'<a href=&quot;'+url+'&quot; target=&quot;_blank&quot; style=&quot;text-decoration:none;font-size:16px&quot;>📷</a>\'">';
+}
 var lastWeightSync = Date.now();
 
 // D: 自动轮询权重更新 (每5分钟)
@@ -116,6 +146,9 @@ function loadFromBackend(callback){
     .then(function(d){
       if(d&&Array.isArray(d)&&d.length){
         DATA=d.map(function(p){return JSON.parse(JSON.stringify(p));});
+        ALL_DATA=DATA.slice(); BATCHES={};
+        DATA.forEach(function(p){ var b=p._batchId||'unknown'; BATCHES[b]=(BATCHES[b]||0)+1; });
+        renderBatchSelector();
         try{localStorage.setItem(CACHED_DATA_KEY,JSON.stringify(DATA));}catch(e){}
         try{localStorage.setItem('amz_cached_data',JSON.stringify(DATA));}catch(e){}
         try{localStorage.setItem('amz_last_import',JSON.stringify({time:new Date().toISOString(),count:d.length,source:'backend'}));}catch(e){}
@@ -404,7 +437,7 @@ function renderDashboard(){
     else if(tm==='待查')tmb='<span class="badge badge-yellow">?</span>';
     else tmb='<span class="badge badge-green">0</span>';
     var cls=(p._score>=70)?'score-high':((p._score>=50)?'score-mid':'score-low');
-    return '<tr class="'+cls+'"><td>'+(i+1)+'</td><td>'+(p.image_url?'<a href="'+p.image_url+'" target="_blank" style="text-decoration:none;font-size:16px" title="点击查看原图">📷</a>':'')+'</td><td>'+p.asin+'</td><td>'+p.title.substr(0,40)+'...</td><td>'+p.brand+'</td><td>$'+p.price_usd+'</td><td>'+p.rating+'★</td><td>'+tmb+'</td><td><b>'+p._score+'</b></td><td><button class="btn btn-sm" onclick="openAmazon(\''+p.asin+'\')">查看</button></td></tr>';
+    return '<tr class="'+cls+'"><td>'+(i+1)+'</td><td>'+(imgTag(p.image_url,40))+'</td><td>'+p.asin+'</td><td>'+p.title.substr(0,40)+'...</td><td>'+p.brand+'</td><td>$'+p.price_usd+'</td><td>'+p.rating+'★</td><td>'+tmb+'</td><td><b>'+p._score+'</b></td><td><button class="btn btn-sm" onclick="openAmazon(\''+p.asin+'\')">查看</button></td></tr>';
   }).join('');
 }
 
@@ -435,9 +468,8 @@ function renderRanking(){
     var sc = p._score || p.score || 0;
     var img = p.image_url || p.image || '';
     if(img&&img.startsWith('//')) img='https:'+img;
-    var pi2 = img ? 'https://proxy.tsscjn.top/?url='+encodeURIComponent(img) : '';
     var price = p.price_usd || p.price || '';
-    return '<tr class="'+cls+'"><td>'+(i+1)+'</td><td>'+(pi2?'<a href="'+img+'" target="_blank" style="text-decoration:none;font-size:18px" title="点击查看原图">📷</a>':'')+'</td><td>'+(p.asin||'')+'</td><td>'+(p.title||'').substr(0,45)+'</td><td>'+(p.brand||'')+'</td><td>$'+price+'</td><td>'+(p.rating||'')+'</td><td>'+((p.review_count||p.reviews||0).toLocaleString())+'</td><td>'+bsrStr+'</td><td>'+(estSales||p.monthly||'')+'</td><td>'+(ship||'')+'</td><td>'+tmb+'</td><td><b>'+sc+'</b></td><td>'+getRec(sc)+'</td><td><a href="https://www.amazon.com/dp/'+(p.asin||'')+'" target="_blank" style="color:#1677ff;font-size:10px">查看</a></td></tr>';
+    return '<tr class="'+cls+'"><td>'+(i+1)+'</td><td>'+imgTag(img,35)+'</td><td>'+(p.asin||'')+'</td><td>'+(p.title||'').substr(0,45)+'</td><td>'+(p.brand||'')+'</td><td>$'+price+'</td><td>'+(p.rating||'')+'</td><td>'+((p.review_count||p.reviews||0).toLocaleString())+'</td><td>'+bsrStr+'</td><td>'+(estSales||p.monthly||'')+'</td><td>'+(ship||'')+'</td><td>'+tmb+'</td><td><b>'+sc+'</b></td><td>'+getRec(sc)+'</td><td><a href="https://www.amazon.com/dp/'+(p.asin||'')+'" target="_blank" style="color:#1677ff;font-size:10px">查看</a></td></tr>';
   }).join('');
 }
 
@@ -612,7 +644,7 @@ function renderSelectWorkbench(){
     rows += '<tr class="'+cls+'" draggable="true" data-asin="'+p.asin+'" style="cursor:grab">'+
       '<td style="cursor:grab;text-align:center;color:#ccc">⋮⋮</td>'+
       '<td><input type="checkbox" '+checked+' onchange="event.stopPropagation();toggleProduct(\''+p.asin+'\',this.checked)"></td>'+
-      '<td>'+(p.image_url?'<a href="'+p.image_url+'" target="_blank" style="text-decoration:none;font-size:16px" title="点击查看原图">📷</a>':'')+'</td>'+
+      '<td>'+imgTag(p.image_url,35)+'</td>'+
       '<td>'+p.asin+'</td>'+
       '<td title="'+(p.title||'').replace(/"/g,'&quot;')+'">'+(p.title||'').substr(0,40)+'</td>'+
       '<td>'+(p.brand||'--')+'</td>'+
@@ -1326,7 +1358,7 @@ function startFissionSearch(){
         if(tm.indexOf('已注册')>-1)tmb='<span class="badge badge-red">1</span>';
         else if(tm==='待查')tmb='<span class="badge badge-yellow">?</span>';
         else tmb='<span class="badge badge-green">0</span>';
-        return '<tr><td>'+(p.image_url?'<a href="'+p.image_url+'" target="_blank" style="text-decoration:none;font-size:16px" title="点击查看原图">📷</a>':'')+'</td><td>'+p.asin+'</td><td>'+(p.title||'').substr(0,45)+'</td><td>'+(p.brand||'--')+'</td><td>$'+(p.price_usd||'--')+'</td><td>'+(p.rating?p.rating+'★':'--')+'</td><td>'+((p.review_count||0).toLocaleString())+'</td><td>'+(p.bsr_text||((p.bsr||[])[0]||{}).rank||'')+'</td><td>'+tmb+'</td><td><b>'+(p._score||'--')+'</b></td></tr>';
+        return '<tr><td>'+imgTag(p.image_url,35)+'</td><td>'+p.asin+'</td><td>'+(p.title||'').substr(0,45)+'</td><td>'+(p.brand||'--')+'</td><td>$'+(p.price_usd||'--')+'</td><td>'+(p.rating?p.rating+'★':'--')+'</td><td>'+((p.review_count||0).toLocaleString())+'</td><td>'+(p.bsr_text||((p.bsr||[])[0]||{}).rank||'')+'</td><td>'+tmb+'</td><td><b>'+(p._score||'--')+'</b></td></tr>';
       }).join('');
     }).catch(function(e){
       if(!fissionRunning) return;
@@ -1738,6 +1770,7 @@ function refreshIPPool(){
   }).catch(function(){});
 }
 
-// IP pool loaded from backend API + proxy status
+// IP pool from backend API | Worker status from /api/proxy-status
+// v2026.06.04-final
 // Boot
 init();
