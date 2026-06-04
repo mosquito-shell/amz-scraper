@@ -75,122 +75,86 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   return false;
 });
 
-// === F: 店铺遍历裂变 (PRD标准) ===
-var fsSellerSeen={}, fsSellerProducts=[], fsSellerQueue=[], fsSellerDone=0, fsSellerTarget=0, fsSellerRunning=false;
+// === 裂变搜索: 纯店铺遍历递归 (PRD标准) ===
+// 种子ASIN → 找跟卖店铺 → 挖爆款 → 找爆款的跟卖店铺 → 无限递归扩散, 直到采够
+var fsProducts=[], fsSeenASIN={}, fsSeenStore={}, fsTarget=0, fsNestLevel=0, fsRunning=false;
 
-function startFissionSeller(seed, target, sender){
-  if(fsSellerRunning)return;
-  fsSellerRunning=true;fsSellerSeen={};fsSellerProducts=[];fsSellerQueue=[];fsSellerTarget=target;fsSellerDone=0;
+function startFission(seed, target, filters, sender){
+  if(fsRunning)return;
+  fsRunning=true;fsProducts=[];fsSeenASIN={};fsSeenStore={};fsTarget=target;fsNestLevel=0;
+  fsSeenASIN[seed]=true;
+  notifyPopup({type:'fission-progress',phase:'store',msg:'🔍 种子: '+seed+' | 深度:0 | 0/'+target,pct:2});
 
-  notifyPopup({type:'fission-progress',phase:'seller',msg:'Scanning offers for sellers...',pct:5});
-
-  chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:'https://www.amazon.com/dp/'+seed},function(r){
-    if(!r||!r.success){notifyPopup({type:'fission-done',products:[],msg:'Failed to fetch'});fsSellerRunning=false;return;}
-    var h=r.html;
-    var stores={};var storeRe=/\/stores\/([^\/]+)\//gi;var m;
-    while((m=storeRe.exec(h))!==null){var name=m[1].toLowerCase();if(name!=='amazon'&&name.length>1)stores['https://www.amazon.com/stores/'+name]=(stores['https://www.amazon.com/stores/'+name]||0)+1;}
-    storeRe=/\/s\?me=([^"&]+)/gi;
-    while((m=storeRe.exec(h))!==null){var sid=m[1];if(sid.length>3)stores['https://www.amazon.com/s?me='+sid]=(stores['https://www.amazon.com/s?me='+sid]||0)+1;}
-    var storeList=Object.keys(stores);storeList.sort(function(a,b){return stores[b]-stores[a];});
-
-    notifyPopup({type:'fission-progress',phase:'seller',msg:'Found '+storeList.length+' seller stores',pct:15});
-    if(!storeList.length){fsSellerRunning=false;notifyPopup({type:'fission-done',products:[],msg:'No sellers found'});return;}
-
-    var visited=0, maxStores=Math.min(storeList.length,10);
-    function visitStore(){
-      if(!fsSellerRunning||visited>=maxStores||fsSellerProducts.length>=fsSellerTarget){
-        fetchDetails();return;
-      }
-      chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:storeList[visited]},function(sr){
-        visited++;
-        if(sr&&sr.success){var asins=exA(sr.html);asins.forEach(function(a){if(!fsSellerSeen[a]&&fsSellerQueue.length<fsSellerTarget*3){fsSellerSeen[a]=true;fsSellerQueue.push(a);}});}
-        var pct=15+Math.round(Math.min(visited/maxStores,1)*30);
-        notifyPopup({type:'fission-progress',phase:'seller',msg:'Stores '+visited+'/'+maxStores+' | '+fsSellerQueue.length+' ASINs',pct:pct});
-        setTimeout(visitStore,2000+Math.random()*1500);
+  // 递归: digest ASIN → extract sellers → crawl store → for each top product → recurse
+  var queue=[seed]; // ASIN queue for seller extraction
+  function processNext(){
+    if(!fsRunning||!queue.length||fsProducts.length>=fsTarget){
+      finishFission();return;
+    }
+    var asin=queue.shift();
+    fsNestLevel++;
+    fsDigestASIN(asin,function(storeUrls){
+      if(!storeUrls.length||fsProducts.length>=fsTarget){processNext();return;}
+      crawlStores(storeUrls.slice(0,5),function(newAsins){
+        newAsins.forEach(function(a){if(!fsSeenASIN[a]){fsSeenASIN[a]=true;queue.push(a);}});
+        var pct=Math.min(2+Math.round(fsProducts.length/fsTarget*85),90);
+        notifyPopup({type:'fission-progress',phase:'store',msg:'🔍 深度:'+fsNestLevel+' | 队列:'+queue.length+' | '+fsProducts.length+'/'+fsTarget,pct:pct});
+        setTimeout(processNext,1000);
       });
-    }
-    visitStore();
-  });
-
-  function fetchDetails(){
-    var todo=fsSellerQueue.slice(0,Math.min(fsSellerTarget*2,fsSellerQueue.length));
-    notifyPopup({type:'fission-progress',phase:'seller',msg:'Fetching '+todo.length+' details...',pct:50});
-    fsSellerDone=0;
-    function nextD(){
-      if(!fsSellerRunning||fsSellerDone>=todo.length||fsSellerProducts.length>=fsSellerTarget){
-        notifyPopup({type:'fission-done',products:fsSellerProducts,msg:'Seller fission done! '+fsSellerProducts.length});
-        fsSellerRunning=false;return;
-      }
-      fd(todo[fsSellerDone],function(d){if(d&&d.title)fsSellerProducts.push(d);fsSellerDone++;var p=50+Math.round(Math.min(fsSellerDone/todo.length,1)*49);notifyPopup({type:'fission-progress',phase:'seller',msg:'Details '+fsSellerDone+'/'+todo.length+' | '+fsSellerProducts.length,pct:p});setTimeout(nextD,2000+Math.random()*1500);});
-    }
-    nextD();
+    });
   }
-}
 
-// === 裂变搜索主循环 (运行于 service worker, 不受 popup 关闭影响) ===
+  // Step 1: Digest an ASIN → get its seller store URLs
+  function fsDigestASIN(asin,cb){
+    chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:'https://www.amazon.com/dp/'+asin},function(r){
+      if(!r||!r.success||!r.html){cb([]);return;}
+      var h=r.html;var stores=[];
+      // Extract store links from offers section
+      var re=/\/stores\/([A-Za-z0-9_-]+)/gi;var m;
+      while((m=re.exec(h))!==null){var name=m[1].toLowerCase();if(name!=='amazon'&&name.length>1&&!fsSeenStore[name]){fsSeenStore[name]=true;stores.push('https://www.amazon.com/stores/'+name+'/page/01-'+name);}}
+      // Also extract seller IDs from /s?me= links
+      var re2=/\/s\?me=([A-Za-z0-9]+)/gi;
+      while((m=re2.exec(h))!==null){var sid=m[1];if(sid.length>3&&!fsSeenStore[sid]){fsSeenStore[sid]=true;stores.push('https://www.amazon.com/s?me='+sid);}}
+      cb(stores);
+    });
+  }
 
-function startFission(seed, target, filters, sender) {
-  if (fissionRunning) return;
-  fissionRunning = true; fissionSeen = {}; fissionQueue = [];
-  fissionEnriched = []; fissionCb = {};
-  fissionTarget = target; fissionFilters = filters || {};
-  fissionDone = 0; fissionTotal = 0;
-
-  // 通知 popup
-  notifyPopup({ type: 'fission-progress', phase: 'search', msg: 'Searching: ' + seed, pct: 3 });
-
-  sp('https://www.amazon.com/s?k=' + seed, function(found) {
-    notifyPopup({ type: 'fission-progress', phase: 'expand', msg: 'Collected ' + fissionQueue.length + ' candidates', pct: 10 });
-    var b1 = fissionQueue.slice(0, 10), b1d = 0;
-    function eb() {
-      if (!fissionRunning || b1d >= b1.length || fissionQueue.length >= fissionTarget * 2) {
-        notifyPopup({ type: 'fission-progress', phase: 'detail', msg: 'Fetching details...', pct: 25 });
-        sf(); return;
-      }
-      fd(b1[b1d], function(d) {
-        if (d && d.title) { fissionEnriched.push(d); }
-        b1d++;
-        notifyPopup({ type: 'fission-progress', phase: 'expand', msg: 'Expand ' + fissionEnriched.length + ' | Q:' + fissionQueue.length, pct: 10 + Math.min(b1d / b1.length, 1) * 15 });
-        if (d && d.kw && (fissionCb[d.kw] || 0) <= 2) {
-          fissionCb[d.kw] = (fissionCb[d.kw] || 0) + 1;
-          sp('https://www.amazon.com/s?k=' + encodeURIComponent(d.kw), function(r2) {
-            if (!fissionRunning) return;
-            if (b1d >= b1.length || fissionQueue.length >= fissionTarget * 2) sf();
+  // Step 2: Crawl each store → extract product ASIN list + fetch their details
+  function crawlStores(storeUrls,cb){
+    var allAsins=[],vi=0;
+    function visitNext(){
+      if(!fsRunning||vi>=storeUrls.length||fsProducts.length>=fsTarget){cb(allAsins);return;}
+      chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:storeUrls[vi]},function(sr){
+        vi++;var asins=[];
+        if(sr&&sr.success){asins=exA(sr.html).filter(function(a){return!fsSeenASIN[a];});}
+        // Fetch details for all products from this store
+        var di=0,todo=asins.slice(0,Math.min(10,target-fsProducts.length));
+        function detailNext(){
+          if(!fsRunning||di>=todo.length||fsProducts.length>=fsTarget){allAsins=allAsins.concat(todo.slice(di));setTimeout(visitNext,500);return;}
+          fd(todo[di],function(d){
+            if(d&&d.title){fsProducts.push(d);fsSeenASIN[d.asin]=true;allAsins.push(d.asin);}
+            di++;var pct=Math.min(2+Math.round(fsProducts.length/fsTarget*85),90);
+            notifyPopup({type:'fission-progress',phase:'store',msg:'🔍 深度:'+fsNestLevel+' | '+fsProducts.length+'/'+fsTarget,pct:pct});
+            setTimeout(detailNext,1800+Math.random()*1200);
           });
         }
-        setTimeout(eb, 2500 + Math.random() * 1000);
+        detailNext();
       });
     }
-    eb();
-  });
-
-  function sf() {
-    var cand = fissionQueue.slice(0, Math.min(fissionTarget * 1.5, fissionQueue.length));
-    var seen = {}; fissionEnriched.forEach(function(e) { seen[e.asin] = true; });
-    cand = cand.filter(function(a) { return !seen[a]; });
-    if (!cand.length) { fn(); return; }
-    fissionDone = 0; fissionTotal = cand.length;
-    notifyPopup({ type: 'fission-progress', phase: 'detail', msg: 'Fetching ' + fissionTotal + ' details...', pct: 25 });
-
-    function nx() {
-      if (!fissionRunning || fissionDone >= fissionTotal || fissionEnriched.length >= fissionTarget) { fn(); return; }
-      fd(cand[fissionDone], function(d) {
-        if (d && d.title) { fissionEnriched.push(d); }
-        fissionDone++;
-        var pct = 25 + Math.round(Math.min(fissionDone / fissionTotal, fissionEnriched.length / fissionTarget) * 74);
-        notifyPopup({ type: 'fission-progress', phase: 'detail', msg: 'Details ' + fissionDone + '/' + fissionTotal + ' | Got:' + fissionEnriched.length, pct: Math.min(pct, 99) });
-        setTimeout(nx, 2000 + Math.random() * 1500);
-      });
-    }
-    nx();
+    visitNext();
   }
 
-  function fn() {
-    fissionEnriched.forEach(function(p) { p.brand = (p.brand || '').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi, '').trim(); });
-    notifyPopup({ type: 'fission-done', products: fissionEnriched, msg: 'Done! ' + fissionEnriched.length + ' products' });
-    fissionRunning = false;
+  function finishFission(){
+    fsProducts.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();});
+    notifyPopup({type:'fission-done',products:fsProducts,msg:'✅ 裂变完成: '+fsProducts.length+' 个商品, 深度'+fsNestLevel});
+    fsRunning=false;
   }
+
+  processNext();
 }
+
+// 兼容 popup 旧调用 (startFissionSeller → 统一到 startFission)
+var startFissionSeller = startFission;
 
 function notifyPopup(data) {
   try { chrome.runtime.sendMessage(data); } catch(e) { /* popup closed, no listener */ }
@@ -284,7 +248,16 @@ function fd(asin, cb) {
     var mo = '', moM = h.match(/(\d+[Kk]?\+?)\s*bought in past month/i); if (moM) mo = moM[1];
     var sh = ''; if (/prime|fulfillment by amazon/i.test(h)) sh = 'FBA'; else if (/free shipping/i.test(h)) sh = 'MFN';
     var isBS = /best seller|#1 best/i.test(h) ? 1 : 0;
-    var img = '', im = h.match(/"hiRes"[^"]*"([^"]+)"/); if (im) img = im[1]; else { var li = h.match(/id="landingImage"[^>]*src="([^"]+)"/); if (li) img = li[1]; }
+    // 多层图片提取 (Match sidepanel/content.js patterns)
+    var img = '';
+    var im = h.match(/"hiRes"\s*:\s*"([^"]+)"/) || h.match(/"hiRes"[^"]*"([^"]+)"/);
+    if (im) { img = im[1]; }
+    if (!img) { im = h.match(/id="landingImage"[^>]*src="([^"]+)"/); if (im) img = im[1]; }
+    if (!img) { im = h.match(/id="imgTagWrapperId"[^>]*<img[^>]*src="([^"]+)"/); if (im) img = im[1]; }
+    if (!img) { im = h.match(/"large"\s*:\s*"([^"]+)"/); if (im) img = im[1]; }
+    if (!img) { im = h.match(/"mainImageUrl"\s*:\s*"([^"]+)"/); if (im) img = im[1]; }
+    if (!img) { im = h.match(/<img[^>]*id="landingImage"[^>]*data-old-hires="([^"]+)"/); if (im) img = im[1]; }
+    if (img && img.startsWith('//')) img = 'https:' + img;
     var kw = ''; if (t) { var wds = t.split(/\s+/).filter(function(w) { return w.length > 4 }); kw = wds.slice(0, 3).join(' '); }
     if (br && br.length > 1 && br !== 'Generic' && !kw) kw = br;
     br = br.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi, '').trim();

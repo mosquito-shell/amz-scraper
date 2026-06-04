@@ -542,19 +542,7 @@ document.getElementById('fs-create').addEventListener('click',function(){
   chrome.runtime.sendMessage({action:'startFission',seed:seed,target:target,filters:filters,tabId:activeTabId});
 });
 
-document.getElementById('fs-seller-start').addEventListener('click',function(){
-  if(fissionRunning){chrome.runtime.sendMessage({action:'cancelFission'});fissionRunning=false;}
-  var m=document.getElementById('fs-url').value.trim().match(/[A-Z0-9]{10}/);if(!m){alert('No valid ASIN');return;}
-  var seed=m[0],target=parseInt(document.getElementById('fs-count').value)||100;
-  fissionRunning=true;
-  var st=document.getElementById('fs-status');st.style.display='block';st.className='status-bar';st.textContent='Store scan...';
-  document.getElementById('fs-progress').style.display='block';
-  var d2=document.getElementById('fs-download');if(d2)d2.style.display='none';
-  document.getElementById('fs-workbench').style.display='none';
-  document.getElementById('fs-create').textContent='关键词裂变';document.getElementById('fs-create').disabled=false;
-  this.textContent='运行中...';this.disabled=true;
-  chrome.runtime.sendMessage({action:'startFissionSeller',seed:seed,target:target,tabId:activeTabId});
-});
+// === PRD 6: 每日定时自动上传 ===
 var lastAutoUpload=parseInt(localStorage.getItem('amz_last_auto_upload')||'0');
 setInterval(function(){
   var now=Date.now();
