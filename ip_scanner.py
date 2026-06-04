@@ -24,7 +24,23 @@ except ImportError:
 OUTPUT_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "proxyIP.txt")
 CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "proxyIP_cache.json")
 
-# ========== IP 来源 (5个开源项目) ==========
+# CF IP 范围 (这些不是代理, 直接过滤掉)
+CF_IP_RANGES = [
+    ("103.21.244.", "103.22.200."), ("103.31.4.", "103.31.4."), ("104.16.", "104.31."),
+    ("108.162.192.", "108.162.207."), ("131.0.72.", "131.0.75."), ("141.101.64.", "141.101.127."),
+    ("162.158.", "162.159."), ("172.64.", "172.71."), ("173.245.48.", "173.245.63."),
+    ("188.114.96.", "188.114.111."), ("190.93.240.", "190.93.255."), ("197.234.240.", "197.234.255."),
+    ("198.41.128.", "198.41."), ("199.27.128.", "199.27."),
+]
+
+def _is_cf_ip(ip):
+    """判断是否 Cloudflare CDN IP (不能做代理)"""
+    for lo, hi in CF_IP_RANGES:
+        if lo <= ip <= hi:
+            return True
+    return False
+
+# ========== IP 来源 (开源项目 + 公开代理列表) ==========
 IP_SOURCES = [
     {
         "name": "free-proxy-list",
@@ -71,6 +87,37 @@ IP_SOURCES = [
         "name": "am-cf-tunnel ipv4 CSV",
         "url": "https://raw.githubusercontent.com/amclubs/am-cf-tunnel/main/example/ipv4.csv",
         "parser": "cf_format",
+    },
+    # 真正的开放HTTP代理列表
+    {
+        "name": "open-proxy-list (TheSpeedX)",
+        "url": "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
+        "parser": "raw_ip_port",
+    },
+    {
+        "name": "open-proxy-list (jetkai)",
+        "url": "https://raw.githubusercontent.com/jetkai/proxy-list/main/online-proxies/txt/proxies-http.txt",
+        "parser": "raw_ip_port",
+    },
+    {
+        "name": "open-proxy-list (roosterkid)",
+        "url": "https://raw.githubusercontent.com/roosterkid/openproxylist/main/HTTPS_RAW.txt",
+        "parser": "raw_ip_port",
+    },
+    {
+        "name": "open-proxy-list (mertguvencli)",
+        "url": "https://raw.githubusercontent.com/mertguvencli/http-proxy-list/main/proxy-list/data.txt",
+        "parser": "raw_ip_port",
+    },
+    {
+        "name": "open-proxy-list (saschazesiger)",
+        "url": "https://raw.githubusercontent.com/saschazesiger/Free-Proxies/master/proxies/http.txt",
+        "parser": "raw_ip_port",
+    },
+    {
+        "name": "open-proxy-list (ShiftyTR)",
+        "url": "https://raw.githubusercontent.com/ShiftyTR/Proxy-List/master/http.txt",
+        "parser": "raw_ip_port",
     },
 ]
 
@@ -218,13 +265,17 @@ def validate_ip(ip, port=443, timeout=8):
 
 
 def validate_batch(ips, max_test=30):
-    """批量验证 IP（限制数量避免太慢）"""
-    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] 验证 IP 可用性 (Batch {len(ips[:max_test])})...")
+    """HTTP代理验证 — 测试IP能否真正转发HTTP请求到httpbin.org"""
+    print(f"\n[{datetime.now().strftime('%H:%M:%S')}] HTTP代理验证 (Batch {len(ips[:max_test])})...")
     valid = []
     test_ips = ips[:max_test]
+    import socket, ssl as _ssl
 
     for i, ip_str in enumerate(test_ips):
-        if ":" in ip_str:
+        if isinstance(ip_str, dict):
+            ip = ip_str.get("ip", "")
+            port = int(ip_str.get("port", 443))
+        elif ":" in ip_str:
             parts = ip_str.split(":")
             ip = parts[0]
             port = int(parts[1]) if len(parts) > 1 else 443
@@ -232,23 +283,84 @@ def validate_batch(ips, max_test=30):
             ip = ip_str
             port = 443
 
-        # Skip obviously bad IPs
-        if ip.startswith(("0.", "10.", "127.", "172.16", "192.168")):
+        # Skip private/bogus/CF IPs
+        if ip.startswith(("0.", "10.", "127.", "172.16", "192.168", "169.254")):
             continue
+        if _is_cf_ip(ip):
+            continue  # CF CDN IP, not a real proxy
 
-        # Simple TCP check (faster than full HTTP)
-        import socket
         try:
+            start_t = time.time()
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(2)
-            if sock.connect_ex((ip, port)) == 0:
-                valid.append({"ip": ip, "port": port, "source": "scan", "latency": 0})
-            sock.close()
-        except:
+            sock.settimeout(4)
+            if sock.connect_ex((ip, port)) != 0:
+                sock.close()
+                continue
+
+            # HTTP代理验证: 发送 CONNECT 或 GET 请求到 httpbin
+            ctx = _ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = _ssl.CERT_NONE
+            try:
+                ssock = ctx.wrap_socket(sock, server_hostname="httpbin.org")
+            except:
+                sock.close()
+                continue
+
+            request = (
+                "GET /ip HTTP/1.1\r\n"
+                "Host: httpbin.org\r\n"
+                "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36\r\n"
+                "Connection: close\r\n\r\n"
+            ).encode()
+            ssock.sendall(request)
+
+            data = b""
+            ssock.settimeout(5)
+            try:
+                while True:
+                    chunk = ssock.recv(4096)
+                    if not chunk: break
+                    data += chunk
+            except: pass
+            ssock.close()
+
+            resp = data.decode(errors='replace')
+            if "origin" in resp and "200" in resp[:50]:
+                latency = int((time.time() - start_t) * 1000)
+                print(f"    ✅ {ip}:{port} ({latency}ms)")
+                valid.append({"ip": ip, "port": port, "source": "verified", "latency": latency})
+            else:
+                # Plain HTTP test (for non-SSL proxies)
+                sock2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock2.settimeout(4)
+                if sock2.connect_ex((ip, port)) == 0:
+                    req2 = (
+                        "GET http://httpbin.org/ip HTTP/1.1\r\n"
+                        "Host: httpbin.org\r\n"
+                        "User-Agent: Mozilla/5.0\r\n"
+                        "Connection: close\r\n\r\n"
+                    ).encode()
+                    sock2.sendall(req2)
+                    d2 = b""
+                    try:
+                        while True:
+                            c = sock2.recv(4096)
+                            if not c: break
+                            d2 += c
+                    except: pass
+                    r2 = d2.decode(errors='replace')
+                    if "origin" in r2:
+                        latency = int((time.time() - start_t) * 1000)
+                        print(f"    ✅ {ip}:{port} HTTP ({latency}ms)")
+                        valid.append({"ip": ip, "port": port, "source": "verified-http", "latency": latency})
+                sock2.close()
+
+        except Exception as e:
             pass
 
         if (i + 1) % 10 == 0:
-            print(f"    已验证 {i+1}/{len(test_ips)}, 可用 {len(valid)}")
+            print(f"    已验证 {i+1}/{len(test_ips)}, 可用代理 {len(valid)}")
 
     valid.sort(key=lambda x: x.get("latency", 999))
     return valid

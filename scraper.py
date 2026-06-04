@@ -119,6 +119,29 @@ def _load_ip_pool():
 
 _load_ip_pool()
 
+# ====== IP 池主动轮换: 记录已用 IP, 不重复使用直到池耗尽 ======
+_IP_USED = set()  # 本轮已用过的 IP
+_IP_CURSOR = 0   # 轮换游标
+
+def _get_next_ip():
+    """返回下一个未用过的代理IP (HTTP代理格式). 池耗尽后重置."""
+    global _IP_CURSOR, _IP_USED
+    if not _IP_POOL:
+        return None
+    # Filter valid proxy IPs only (port 80/3128/8080 — 开放代理端口)
+    usable = [(ip,p) for ip,p in _IP_POOL if p in (80,3128,8080,1080,8888,9090,8000,8118)]
+    if not usable:
+        usable = _IP_POOL  # fallback to all
+    # Remove already-used IPs
+    fresh = [(ip,p) for ip,p in usable if ip not in _IP_USED]
+    if not fresh:
+        _IP_USED.clear()
+        fresh = usable
+    ip, port = fresh[_IP_CURSOR % len(fresh)]
+    _IP_CURSOR += 1
+    _IP_USED.add(ip)
+    return f"http://{ip}:{port}"
+
 # ====== 第1层: UA 池 (20个真实 Chrome UA, 随机切换) ======
 import random as _random
 UA_POOL = [
@@ -228,15 +251,37 @@ if not os.path.isdir(IMAGE_DIR):
 
 
 def fetch(url, retries=4):
-    """通过 CF Worker 代理池抓取 — 四层反爬防护"""
+    """通过 CF Worker + IP池 双层代理抓取 — 主动轮换, 永不重复"""
     from urllib.parse import quote
     encoded = quote(url, safe='')
     cookie = ""
 
     for attempt in range(retries):
-        # 第1层: 选未冷却 Worker + 随机 UA
-        proxy = get_active_proxy(attempt)
+        # 主动轮换: 每3次请求中有1次走IP池直连, 2次走Worker
+        use_ip_pool = (attempt % 3 == 1) and (_IP_POOL is not None and len(_IP_POOL) > 0)
         headers = random_headers()
+
+        if use_ip_pool:
+            # IP池直连模式: 用开放代理直接请求 (不经过Worker)
+            ip_proxy = _get_next_ip()
+            if ip_proxy:
+                try:
+                    with httpx.Client(verify=False, timeout=30, follow_redirects=True,
+                                      headers=headers, proxy=ip_proxy) as client:
+                        resp = client.get(url)
+                        html = resp.text
+                        if resp.status_code == 200 and len(html) > 1500:
+                            blocked, _ = detect_block(html)
+                            if not blocked:
+                                print(f"  [IP池✅] {ip_proxy.split('//')[1]}")
+                                return html
+                except:
+                    pass
+            # IP池失败 → 回退到Worker
+            pass
+
+        # Worker 代理模式
+        proxy = get_active_proxy(attempt)
         proxy_url = f"{proxy}/?url={encoded}"
         if cookie:
             proxy_url += f"&cookie={quote(cookie, safe='')}"
@@ -245,7 +290,6 @@ def fetch(url, retries=4):
             with httpx.Client(verify=False, timeout=30, follow_redirects=True, headers=headers) as client:
                 resp = client.get(proxy_url)
                 html = resp.text
-                # 收集 cookie
                 proxy_cookie = resp.headers.get("x-proxy-cookie", "")
                 if proxy_cookie: cookie = proxy_cookie
 
@@ -255,15 +299,13 @@ def fetch(url, retries=4):
                     time.sleep(3 + attempt * 2)
                     continue
 
-                # 第3层: 验证码/拦截检测
                 blocked, reason = detect_block(html)
                 if blocked:
-                    print(f"  [{proxy.split('//')[1][:20]}] {reason}, 切换 Worker...")
-                    cool_down_proxy(proxy, 600)  # 封 10 分钟
+                    print(f"  [{proxy.split('//')[1][:20]}] {reason}, 切换...")
+                    cool_down_proxy(proxy, 600)
                     time.sleep(5 + attempt * 3)
                     continue
 
-                # bm-verify 自动跟踪
                 bm_match = re.search(r"URL=\s*['\"]?([^'\"\s>]+)", html)
                 if bm_match and "bm-verify" in html[:2000]:
                     redirect = bm_match.group(1).replace("&amp;", "&")
@@ -274,11 +316,9 @@ def fetch(url, retries=4):
                     elif not redirect.startswith("http"):
                         redirect = url.rstrip("/") + "/" + redirect.lstrip("/")
                     encoded = quote(redirect, safe='')
-                    print(f"  bm-verify, 跟随跳转...")
                     time.sleep(2)
                     continue
 
-                # 成功
                 return html
 
         except Exception as e:
