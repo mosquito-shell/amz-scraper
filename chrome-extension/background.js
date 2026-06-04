@@ -75,40 +75,33 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   return false;
 });
 
-// === 裂变搜索: 关键词搜索 + fd详情 (PRD标准, 搜索页有data-asin稳定提取) ===
-var fsProducts=[], fsSeenASIN={}, fsTarget=0, fsRunning=false, fsAllRawASINs=[];
+// === 裂变搜索: 关键词搜索 → 批量 enrichBatch → 一次返回 ===
+var fsProducts=[], fsSeenASIN={}, fsTarget=0, fsRunning=false, fsAllRawASINs=[], fsWatchdog=null;
 
 function startFission(seed, target, filters, sender){
   if(fsRunning)return;
   fsRunning=true;fsProducts=[];fsSeenASIN={};fsTarget=target;fsAllRawASINs=[];fsConsecutive=0;
   notifyPopup({type:'fission-progress',phase:'search',msg:'🔍 种子: '+seed+' | 0/'+target,pct:2});
 
-  // Global watchdog: force finish after 5 minutes
-  var watchdog=setTimeout(function(){if(fsRunning){fsRunning=false;finishFission();}},300000);
+  // 5分钟看门狗
+  fsWatchdog=setTimeout(function(){if(fsRunning)finishFission();},300000);
 
-  // Step 1: Fetch seed detail first for keywords
-  fd(seed,function(d){
-    if(d&&d.title){fsProducts.push(d);}
-    var kws=extractKeywords(d||{title:seed,brand:''});
-    fsAllRawASINs.push(seed);fsSeenASIN[seed]=true;
-    expandLoop(kws);
-  });
+  // 直接用种子 ASIN 作为第一个关键词去搜
+  expandLoop([seed]);
 
   function extractKeywords(p){
-    var titleWords=(p.title||'').toLowerCase().split(/[\s\/\-]+/).filter(function(w){return w.length>4&&!/^\d/.test(w);});
-    var brand=(p.brand||'').toLowerCase().replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();
-    if(brand&&brand.length>2&&brand!=='generic')titleWords.unshift(brand);
-    // Remove duplicates while preserving order
-    var seen={},unique=[];
-    titleWords.forEach(function(w){if(!seen[w]){seen[w]=true;unique.push(w);}});
-    return unique;
+    var words=(p.title||'').toLowerCase().split(/[\s\/\-]+/).filter(function(w){return w.length>4&&!/^\d/.test(w);});
+    var br=(p.brand||'').toLowerCase().replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();
+    if(br&&br.length>2&&br!=='generic')words.unshift(br);
+    var seen={},u=[];
+    words.forEach(function(w){if(!seen[w]){seen[w]=true;u.push(w);}});
+    return u;
   }
 
-  // 搜索 → 抓ASIN → 补详情 → 循环
   var usedKws={}, kv=0;
   function expandLoop(kws){
     if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
-    if(fsConsecutive++>12){finishFission();return;}
+    if(fsConsecutive++>15){finishFission();return;}
 
     var kw=kws[kv++];if(!kw){kv=0;kw=kws[kv];}
     if(!kw||usedKws[kw]){setTimeout(function(){expandLoop(kws);},200);return;}
@@ -119,39 +112,31 @@ function startFission(seed, target, filters, sender){
 
     chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:url},function(sr){
       if(!sr||!sr.success){fsConsecutive++;setTimeout(function(){expandLoop(kws);},500);return;}
-      var asins=exA(sr.html);
-      var fresh=[];asins.forEach(function(a){if(!fsSeenASIN[a]){fsSeenASIN[a]=true;fresh.push(a);}});
+      var fresh=exA(sr.html).filter(function(a){return!fsSeenASIN[a];});
+      fresh.forEach(function(a){fsSeenASIN[a]=true;});
       if(!fresh.length){fsConsecutive++;setTimeout(function(){expandLoop(kws);},500);return;}
 
-      var fi=0,maxFetch=Math.min(fresh.length,fsTarget-fsProducts.length+10);
-      function fetchOne(){
-        if(!fsRunning||fi>=maxFetch||fsProducts.length>=fsTarget){
-          fsProducts.slice(-5).forEach(function(p){
-            var sub=extractKeywords(p);
-            sub.forEach(function(w){if(!usedKws[w]){kws.push(w);}});
-          });
-          setTimeout(function(){expandLoop(kws);},300);return;
-        }
-        var af=fresh[fi];fi++;
-        // Retry fd up to 2 times for network errors
-        var retry=0;
-        function doFd(){
-          fd(af,function(d){
+      // 用 enrichBatch 一次性抓所有新 ASIN 的详情
+      var batchSize=Math.min(fresh.length,fsTarget-fsProducts.length+10);
+      chrome.tabs.sendMessage(fissionActiveTab,{action:'enrichBatch',asins:fresh.slice(0,batchSize)},function(result){
+        if(result&&result.success&&result.products){
+          result.products.forEach(function(d){
             if(d&&d.title){fsProducts.push(d);fsConsecutive=0;}
-            else if(!d||d.err||retry<1){retry++;setTimeout(doFd,2000);return;}
-            var pct=10+Math.round(fsProducts.length/fsTarget*85);
-            notifyPopup({type:'fission-progress',phase:'detail',msg:'📦 '+fsProducts.length+'/'+fsTarget+' products',pct:Math.min(pct,99)});
-            setTimeout(fetchOne,1500+Math.random()*1000);
           });
         }
-        doFd();
-      }
-      fetchOne();
+        // 从新商品提取关键词继续扩散
+        fsProducts.slice(-5).forEach(function(p){
+          extractKeywords(p).forEach(function(w){if(!usedKws[w]){kws.push(w);}});
+        });
+        var pct=10+Math.round(fsProducts.length/fsTarget*85);
+        notifyPopup({type:'fission-progress',phase:'detail',msg:'📦 '+fsProducts.length+'/'+fsTarget+' products',pct:Math.min(pct,99)});
+        setTimeout(function(){expandLoop(kws);},300);
+      });
     });
   }
 
   function finishFission(){
-    if(!fsRunning) return;
+    if(!fsRunning)return;clearTimeout(fsWatchdog);
     fsProducts.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();});
     notifyPopup({type:'fission-done',products:fsProducts,msg:'✅ 裂变完成: '+fsProducts.length+' 个商品'});
     fsRunning=false;
@@ -167,7 +152,7 @@ function notifyPopup(data) {
 // === 类目导出 (后台运行, 不中断) ===
 function startExport(count, sender) {
   if (exportRunning) return;
-  exportRunning = true; exportProducts = []; exportTotal = count; exportDone = 0; var exportSent = 0;
+  exportRunning = true; exportProducts = []; exportTotal = count; exportDone = 0;
 
   chrome.tabs.sendMessage(exportTab, { action: 'scrape' }, function(r) {
     if (!r || !r.success) { notifyPopup({ type: 'export-progress', msg: 'Failed to scrape', done: 0, total: 0, pct: 0 }); exportRunning = false; return; }
@@ -176,36 +161,29 @@ function startExport(count, sender) {
     if (!exportTotal) { notifyPopup({ type: 'export-done', products: [], msg: '0 products found' }); exportRunning = false; return; }
     notifyPopup({ type: 'export-progress', msg: 'Got ' + exportTotal + '. Enriching...', done: 0, total: exportTotal, pct: 5 });
 
-    function nx() {
-      if (!exportRunning || exportSent >= exportTotal) {
-        // Wait for pending callbacks (max 30s)
-        var waited = 0;
-        function checkDone() {
-          if (exportProducts.length >= exportTotal || waited > 30 || !exportRunning) {
-            notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
-            exportRunning = false; return;
-          }
-          waited++; setTimeout(checkDone, 1000);
-        }
-        checkDone(); return;
-      }
-      var idx = exportSent; exportSent++;
-      fd(prods[idx].asin, function(d) {
-        exportProducts.push({
-          asin: prods[idx].asin, title: prods[idx].title || (d&&d.title) || '',
-          brand: prods[idx].brand || (d&&d.brand) || '', link: 'https://www.amazon.com/dp/' + prods[idx].asin,
-          image: prods[idx].image_url || (d&&d.image) || '', price: prods[idx].price_usd || (d&&d.price) || '',
-          rating: prods[idx].rating || (d&&d.rating) || '', reviews: prods[idx].review_count || (d&&d.reviews) || 0,
-          shipping: prods[idx]._shipping || (d&&d.shipping) || '',
-          weight: (d && d.weight) || '', dims: (d && d.dims) || '',
-          bsr: (d && d.bsr) || ((prods[idx].bsr || [])[0] ? ((prods[idx].bsr || [])[0].rank || '') : ''),
-          monthly: prods[idx].monthly || (d&&d.monthly) || '', stock: (d&&d.stock)||0, sellerCount: (d&&d.sellerCount)||0
+    // enrichBatch: content.js 一次性批量抓取所有 ASIN 详情, 不依赖后台多次 sendMessage 往返
+    var asins = prods.map(function(p) { return p.asin; });
+    chrome.tabs.sendMessage(exportTab, { action: 'enrichBatch', asins: asins }, function(result) {
+      if (!result || !result.success) {
+        // fallback: 返回浅层数据
+        exportProducts = prods.map(function(p) { return { asin: p.asin, title: p.title||'', brand: p.brand||'', link: 'https://www.amazon.com/dp/'+p.asin, image: p.image_url||'', price: p.price_usd||'', rating: p.rating||'', reviews: p.review_count||0, shipping: p._shipping||'' }; });
+      } else {
+        exportProducts = (result.products || []).map(function(d, i) {
+          return {
+            asin: d.asin || prods[i].asin, title: d.title || prods[i].title || '',
+            brand: d.brand || prods[i].brand || '', link: 'https://www.amazon.com/dp/' + (d.asin || prods[i].asin),
+            image: d.image || prods[i].image_url || '', price: d.price || prods[i].price_usd || '',
+            rating: d.rating || prods[i].rating || '', reviews: d.reviews || prods[i].review_count || 0,
+            shipping: d.shipping || prods[i]._shipping || '',
+            weight: d.weight || '', dims: d.dims || '',
+            bsr: d.bsr || ((prods[i].bsr || [])[0] ? ((prods[i].bsr || [])[0].rank || '') : ''),
+            monthly: d.monthly || prods[i].monthly || ''
+          };
         });
-        notifyPopup({ type: 'export-progress', msg: 'Enrich ' + exportProducts.length + '/' + exportTotal, done: exportProducts.length, total: exportTotal, pct: 5 + Math.round(exportProducts.length / exportTotal * 90) });
-      });
-      setTimeout(nx, 1800 + Math.random() * 1200);
-    }
-    nx();
+      }
+      notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
+      exportRunning = false;
+    });
   });
 }
 

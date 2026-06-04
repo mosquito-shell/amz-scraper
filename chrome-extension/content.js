@@ -176,6 +176,56 @@
       }
       sendResponse({});
     }
+    if (request.action === 'enrichBatch') {
+      // 批量补详情: content.js 自己串行 fetch 所有 ASIN 详情页, 返回完整结果
+      // 避免 background.js → sendMessage → content.js 多次往返导致的回调丢失
+      var todo = (request.asins || []).slice(0, 100);
+      var results = [];
+      function next(i) {
+        if (i >= todo.length) { sendResponse({ success: true, products: results }); return; }
+        var asin = todo[i];
+        var t0 = Date.now();
+        var timer = setTimeout(function() {
+          results.push({ asin: asin, title: '', brand: '', err: 'timeout' });
+          next(i + 1);
+        }, 12000);
+        fetch('https://www.amazon.com/dp/' + asin, { credentials: 'include', headers: { 'User-Agent': navigator.userAgent, 'Accept': 'text/html' } })
+          .then(function(r) { return r.text(); })
+          .then(function(html) {
+            clearTimeout(timer);
+            if (!html || html.length < 5000) { results.push({ asin: asin, title: '', brand: '', err: 'blocked' }); next(i + 1); return; }
+            try {
+              var d = {};
+              var m = html.match(/id="productTitle"[^>]*>([^<]+)/); if (m) d.title = m[1].trim();
+              m = html.match(/id="bylineInfo"[^>]*>([^<]+)/); if (m) d.brand = m[1].trim().replace(/Visit the /, '').replace(/ Store/, '');
+              if (!d.brand) { m = html.match(/Brand<\/[^>]*>\s*<[^>]*>\s*([^<]+)/i); if (m) d.brand = m[1].trim(); }
+              if (!d.brand) { m = html.match(/data-feature-name="bylineInfo"[^>]*>\s*([^<]+)/i); if (m) d.brand = m[1].trim(); }
+              if (!d.brand) { m = html.match(/Brand[:\s]*\s*([^<\n]{2,30})/i); if (m) d.brand = m[1].trim(); }
+              m = html.match(/priceblock_ourprice[^>]*>\$(\d+\.?\d{0,2})/); if (!m) m = html.match(/a-price-whole[^>]*>(\d+)[^<]*<[^>]*a-price-fraction[^>]*>(\d+)/);
+              if (m && m[2]) d.price = m[1] + '.' + m[2]; else if (m) d.price = m[1];
+              if (!d.price) { m = html.match(/id="corePrice[^"]*"[^>]*>[^$]*\$(\d+\.?\d{0,2})/); if (m) d.price = m[1]; }
+              if (!d.price) { m = html.match(/>\$(\d+\.?\d{0,2})</); if (m) d.price = m[1]; }
+              m = html.match(/(\d\.\d).*?out of 5/i); if (m) d.rating = m[1];
+              m = html.match(/([\d,]+)\s*(?:rating|review)/i); if (m) d.reviews = m[1].replace(/,/g, '');
+              m = html.match(/Best Sellers Rank[^#]*#([\d,]+)/); if (m) d.bsr = m[1];
+              m = html.match(/Item Weight[^>]*>\s*(\d+\.?\d*)\s*(pounds?|ounces?|kg|Pounds?|Ounces?|g)/i); if (!m) m = html.match(/Weight[:\s]*\s*(\d+\.?\d*)\s*(pounds?|ounces?|kg)/i);
+              if (m) { var v = parseFloat(m[1]), u = m[2].toLowerCase(); v = /ounce/.test(u) ? +(v / 35.274).toFixed(2) : /pound/.test(u) ? +(v / 2.205).toFixed(2) : /gram/.test(u) && !/kg/.test(u) ? +(v / 1000).toFixed(3) : v; d.weight = v + ' kg'; }
+              m = html.match(/Dimensions[^<]*<\/(?:span|td)[^>]*>\s*<[^>]*>\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(inches?|cm)?/i); if (!m) m = html.match(/Dimensions[:\s]*\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(inches?|cm)?/i);
+              if (m) { var l = parseFloat(m[1]), w = parseFloat(m[2]), h = parseFloat(m[3]), du = (m[4] || '').toLowerCase(); if (du.indexOf('in') >= 0) { l = Math.round(l * 2.54 * 10) / 10; w = Math.round(w * 2.54 * 10) / 10; h = Math.round(h * 2.54 * 10) / 10; } d.dims = l + 'x' + w + 'x' + h; }
+              m = html.match(/(\d+[Kk]?\+?)\s*bought in past month/i); if (m) d.monthly = m[1];
+              if (/prime|fulfillment by amazon/i.test(html)) d.shipping = 'FBA'; else if (/free shipping/i.test(html)) d.shipping = 'MFN';
+              m = html.match(/"hiRes"\s*:\s*"([^"]+)"/); if (!m) m = html.match(/id="landingImage"[^>]*src="([^"]+)"/);
+              if (m) d.image = m[1]; if (d.image && d.image.startsWith('//')) d.image = 'https:' + d.image;
+              d.asin = asin; d.link = 'https://www.amazon.com/dp/' + asin;
+              results.push(d);
+            } catch(e) { results.push({ asin: asin, err: e.message }); }
+            next(i + 1);
+          })
+          .catch(function(e) { clearTimeout(timer); results.push({ asin: asin, err: e.message }); next(i + 1); });
+      }
+      next(0);
+      return true;
+    }
     if (request.action === 'fetchSearch') {
       var done = false;
       var t = setTimeout(function(){ if(!done){done=true;sendResponse({success:false,error:'timeout',html:''});} }, 12000);
