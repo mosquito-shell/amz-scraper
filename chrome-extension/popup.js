@@ -224,6 +224,9 @@ function rWB(prods,tid,cid,pfx){
     var nt=(wbNotes[p.asin]||'').substr(0,10);var tmr=tm(p.brand);var tc=tmr==='1'?'color:#cf1322':(tmr==='0'?'color:#389e0d':'color:#d48806');
     var cl=(p.score||0)>=70?'background:#d4edda':((p.score||0)>=50?'background:#fffbe6':'background:#f8d7da');
     var img=p.image||'';if(img.startsWith('//'))img='https:'+img;var ic=img?'<img src="'+img+'" width="32" height="32" style="object-fit:contain;border-radius:3px" onerror="this.onerror=null;this.parentNode.textContent=\'📷\'">':'';
+    // B: 库存监控销量
+    var invSales=calcSalesByInventory(p);if(p.stock!==undefined)logStock(p.asin,p.stock);
+    var invTxt=invSales?'<br><span style="font-size:8px;color:#52c41a">🟢'+invSales+'/月</span>':'';
     var lk=p.link||('https://www.amazon.com/dp/'+p.asin);
     var tr=document.createElement('tr');tr.style.cssText=cl+';border-bottom:1px solid #f0f0f0';tr.setAttribute('draggable','true');tr.dataset.asin=p.asin;
     tr.innerHTML='<td style="cursor:grab;text-align:center;color:#ccc">+</td><td><input type="checkbox" '+ch+'></td><td style="text-align:center">'+ic+'</td><td style="font-size:9px">'+p.asin+'</td><td style="max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+(p.title||'').replace(/"/g,'&quot;')+'">'+(p.title||'')+'</td><td style="font-size:10px">'+(p.brand||'--')+'</td><td>'+(p.price?'$'+p.price:'--')+'</td><td style="font-weight:bold;'+tc+'">'+tmr+'</td><td style="font-weight:bold">'+(p.score||'--')+'</td><td style="cursor:pointer;text-align:center;font-size:14px">'+th+'</td><td style="font-size:9px;color:#888">'+nt+'</td><td style="font-size:9px"><a href="'+lk+'" target="_blank" style="color:#1677ff">link</a></td><td style="text-align:center;cursor:pointer;color:#ccc;font-size:16px" title="删除此条" class="wb-del">×</td>';

@@ -10,6 +10,50 @@ var WEIGHTS = JSON.parse(localStorage.getItem('amz_weights') || '{"price":20,"de
 var currentPage = 'dashboard';
 var fissionRunning = false;
 var API_BASE = 'https://api.tsscjn.top';
+var lastWeightSync = Date.now();
+
+// D: 自动轮询权重更新 (每5分钟)
+setInterval(function(){
+  fetch(API_BASE+'/api/weights').then(function(r){return r.json()}).then(function(d){
+    if(d&&d.weights&&d.last_update){
+      var backendTime = new Date(d.last_update).getTime();
+      if(backendTime > lastWeightSync){
+        lastWeightSync = backendTime;
+        WEIGHTS = d.weights;
+        localStorage.setItem('amz_weights',JSON.stringify(d.weights));
+        scoreAll(DATA);
+        renderCurrent();
+        showToast('🔄 权重已从后端自动更新');
+      }
+    }
+  }).catch(function(){});
+}, 300000); // 5 min
+
+// C: 利润驱动权重建议
+function calcOptimalWeights(){
+  var best = {w:JSON.parse(JSON.stringify(WEIGHTS)), profit:0, reason:''};
+  // 策略: 提高 competition 和 demand 权重来找低竞争高需求品
+  // 策略: 显著降低 high-tariff (>15%) 商品的品牌分权重
+  var strategies = [
+    {price:18,demand:30,competition:22,brand:10,safety:10,social:10, name:'蓝海猎人', desc:'高需求+低竞争+低关税率→利润最大化'},
+    {price:20,demand:25,competition:20,brand:15,safety:10,social:10, name:'均衡', desc:'当前默认配置'},
+    {price:22,demand:22,competition:18,brand:18,safety:10,social:10, name:'品牌安全', desc:'规避侵权风险,安全优先'},
+    {price:15,demand:28,competition:25,brand:12,safety:10,social:10, name:'爆品跟卖', desc:'跟卖热门品,高需求低价格'},
+  ];
+  var results = strategies.map(function(s){
+    var tot = 0; for(var k in s){if(k!=='name'&&k!=='desc')tot+=s[k];}
+    var adj = 100-tot; s.demand += adj; // normalize
+    var oldW = JSON.parse(JSON.stringify(WEIGHTS));
+    WEIGHTS = s;
+    scoreAll(DATA);
+    var highScore = DATA.filter(function(p){return p._score>=70;});
+    var lowTariff = highScore.filter(function(p){return (p.hsTariff||7.5)<=5;});
+    WEIGHTS = oldW; scoreAll(DATA);
+    return {name:s.name, desc:s.desc, w:s, high:highScore.length, lowTariff:lowTariff.length, profit:lowTariff.length*100+highScore.length*20};
+  });
+  results.sort(function(a,b){return b.profit-a.profit;});
+  return results;
+}
 
 // 从 shared_data.json 加载 (部署后和本地同目录)
 var SHARED_DATA_URL = 'shared_data.json';
@@ -111,7 +155,7 @@ function saveSharedData(){
   }catch(e){}
 }
 
-// ========== BSR → 销量估算 ==========
+// ========== 销量估算 (BSR推算 + 库存监控) ==========
 function bsrToSales(rank, category){
   var r=parseInt(String(rank||'999999').replace(/,/g,''));
   if(!r||isNaN(r)) return '-';

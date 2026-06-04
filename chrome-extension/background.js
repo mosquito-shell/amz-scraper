@@ -269,6 +269,18 @@ function checkTrademarksBatch(brands, callback) {
   });
 }
 
+// PRD: WIPO 国家筛选 — 获取品牌注册国家列表
+function checkTrademarkCountries(brand, callback) {
+  var cleanBrand = brand.toLowerCase().trim();
+  getUSPTO(cleanBrand, function(r) {
+    var c = r.countries || [];
+    if (!r.registered) { tryWIPO(cleanBrand, function(wr) { callback({registered:wr.registered,countries:(wr.countries||[]),sources:['uspto','wipo']}); }); }
+    else { callback({registered:1,countries:c,sources:['uspto']}); }
+  });
+}
+
+// A: 在 USPTO/WIPO 查询结果中已包含 countries 字段, see getUSPTO/tryWIPO
+
 function getUSPTO(brand, callback) {
   var cleanBrand = brand.toLowerCase().trim();
   fetch('https://tsdr.uspto.gov/tsdr/api/v1/search?q=' + encodeURIComponent(cleanBrand) + '&pageSize=10&page=0', { headers: { 'Accept': 'application/json' } })

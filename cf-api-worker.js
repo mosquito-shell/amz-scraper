@@ -312,6 +312,36 @@ async function handleRequest(request, env) {
       return cors(request, response);
     }
 
+    // ===== PRD E: 每日快照 =====
+    if (path === '/api/daily-snapshot' && method === 'GET') {
+      const snapshots = await env.AMZ_DATA.get('daily_snapshots', 'json') || [];
+      response = json(snapshots);
+      return cors(request, response);
+    }
+
+    if (path === '/api/daily-snapshot' && method === 'POST') {
+      const weights = await env.AMZ_DATA.get('weights', 'json') || {};
+      const products = await env.AMZ_DATA.get('products', 'json') || [];
+      const snapshots = await env.AMZ_DATA.get('daily_snapshots', 'json') || [];
+
+      const snap = {
+        date: new Date().toISOString().slice(0,10),
+        time: new Date().toISOString(),
+        productCount: Array.isArray(products)?products.length:0,
+        weights: weights,
+        highScore: (Array.isArray(products)?products.filter(function(p){return(p.score||p._score||0)>=70;}).length:0),
+        avgScore: Array.isArray(products)?Math.round(products.reduce(function(s,p){return s+(p.score||p._score||0);},0)/Math.max(1,products.length)*10)/10:0
+      };
+
+      // Deduplicate same day
+      var existing = snapshots.filter(function(s){return s.date!==snap.date;});
+      existing.push(snap);
+      if (existing.length > 90) existing = existing.slice(-90); // 90 days
+      await env.AMZ_DATA.put('daily_snapshots', JSON.stringify(existing));
+      response = json({ok:true,snapshot:snap,total:existing.length});
+      return cors(request, response);
+    }
+
     // ===== Status / Health =====
     if (path === '/api/status' || path === '/') {
       const lastSync = await env.AMZ_DATA.get('last_sync') || 'never';
