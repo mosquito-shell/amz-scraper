@@ -102,14 +102,15 @@ function startFission(seed, target, filters, sender){
   }
 
   // 搜索 → 抓ASIN → 提取关键词 → 搜索 → ... 直到采够
-  var usedKws={}, kv=0;
+  var usedKws={}, kv=0, consecutiveSkips=0;
   function expandLoop(kws){
     if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
+    if(consecutiveSkips>8){finishFission();return;} // deadlock protection
 
-    var kw=kws[kv++];if(!kw){kv=0;kw=kws[kv];} // wrap
+    var kw=kws[kv++];if(!kw){kv=0;kw=kws[kv];}
     if(!kw){finishFission();return;}
-    if(usedKws[kw]){setTimeout(function(){expandLoop(kws);},100);return;}
-    usedKws[kw]=true;
+    if(usedKws[kw]){consecutiveSkips++;setTimeout(function(){expandLoop(kws);},200);return;}
+    usedKws[kw]=true;consecutiveSkips=0;
 
     var url='https://www.amazon.com/s?k='+encodeURIComponent(kw);
     notifyPopup({type:'fission-progress',phase:'search',msg:'🔍 搜索: '+kw+' | '+fsProducts.length+'/'+fsTarget,pct:10+Math.round(fsProducts.length/fsTarget*20)});
@@ -120,7 +121,7 @@ function startFission(seed, target, filters, sender){
       var fresh=[];asins.forEach(function(a){if(!fsSeenASIN[a]){fsSeenASIN[a]=true;fresh.push(a);}});
       fsAllRawASINs=fsAllRawASINs.concat(fresh);
 
-      if(!fresh.length){setTimeout(function(){expandLoop(kws);},500);return;}
+      if(!fresh.length){consecutiveSkips++;setTimeout(function(){expandLoop(kws);},500);return;}
 
       // Fetch details for fresh ASINs
       var fi=0,maxFetch=Math.min(fresh.length,target-fsProducts.length+5);
@@ -146,6 +147,7 @@ function startFission(seed, target, filters, sender){
   }
 
   function finishFission(){
+    if(!fsRunning) return;
     fsProducts.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();});
     notifyPopup({type:'fission-done',products:fsProducts,msg:'✅ 裂变完成: '+fsProducts.length+' 个商品'});
     fsRunning=false;
@@ -174,10 +176,13 @@ function startExport(count, sender) {
         if (exportRunning) notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
         exportRunning = false; return;
       }
-      chrome.tabs.sendMessage(exportTab, { action: 'getDetail', asin: prods[exportDone].asin }, function(dd) {
+      var asin = prods[exportDone].asin;
+      var called = false;
+      chrome.tabs.sendMessage(exportTab, { action: 'getDetail', asin: asin }, function(dd) {
+        if (called) return; called = true;
         exportProducts.push({
-          asin: prods[exportDone].asin, title: prods[exportDone].title || '',
-          brand: prods[exportDone].brand || '', link: 'https://www.amazon.com/dp/' + prods[exportDone].asin,
+          asin: asin, title: prods[exportDone].title || '',
+          brand: prods[exportDone].brand || '', link: 'https://www.amazon.com/dp/' + asin,
           image: prods[exportDone].image_url || '', price: prods[exportDone].price_usd || '',
           rating: prods[exportDone].rating || '', reviews: prods[exportDone].review_count || 0,
           shipping: prods[exportDone]._shipping || '',
@@ -191,6 +196,10 @@ function startExport(count, sender) {
         notifyPopup({ type: 'export-progress', msg: 'Enrich ' + exportDone + '/' + exportTotal, done: exportDone, total: exportTotal, pct: 5 + Math.round(exportDone / exportTotal * 90) });
         setTimeout(nx, 1500 + Math.random() * 1000);
       });
+      // Timeout: if getDetail doesn't respond in 8s, skip this ASIN
+      setTimeout(function(){
+        if (!called) { called = true; exportProducts.push({ asin: asin, title: prods[exportDone].title || '', brand: prods[exportDone].brand || '', link: 'https://www.amazon.com/dp/' + asin, image: prods[exportDone].image_url || '', price: prods[exportDone].price_usd || '', rating: prods[exportDone].rating || '', reviews: prods[exportDone].review_count || 0 }); exportDone++; notifyPopup({ type: 'export-progress', msg: 'Skip ' + exportDone + '/' + exportTotal + ' (timeout)', done: exportDone, total: exportTotal, pct: 5 + Math.round(exportDone / exportTotal * 90) }); setTimeout(nx, 500); }
+      }, 8000);
     }
     nx();
   });
