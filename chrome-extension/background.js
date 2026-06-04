@@ -88,8 +88,11 @@ function startFission(seed, target, filters, sender){
   // 递归: digest ASIN → extract sellers → crawl store → for each top product → recurse
   var queue=[seed]; // ASIN queue for seller extraction
   function processNext(){
-    if(!fsRunning||!queue.length||fsProducts.length>=fsTarget){
-      finishFission();return;
+    if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
+    if(!queue.length){
+      // 队列耗尽 → 用关键词搜索填充更多ASIN
+      notifyPopup({type:'fission-progress',phase:'store',msg:'🔍 队列耗尽, 关键词补充扩散... | '+fsProducts.length+'/'+fsTarget,pct:Math.min(90,2+Math.round(fsProducts.length/fsTarget*85))});
+      searchFallback();return;
     }
     var asin=queue.shift();
     fsNestLevel++;
@@ -101,6 +104,24 @@ function startFission(seed, target, filters, sender){
         notifyPopup({type:'fission-progress',phase:'store',msg:'🔍 深度:'+fsNestLevel+' | 队列:'+queue.length+' | '+fsProducts.length+'/'+fsTarget,pct:pct});
         setTimeout(processNext,1000);
       });
+    });
+  }
+
+  // 关键词搜索补充 (当店铺遍历不够时)
+  function searchFallback(){
+    if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
+    var lastProduct=fsProducts[fsProducts.length-1]||{};
+    var kw=(lastProduct.brand||'')+' '+(lastProduct.title||'').split(' ').slice(0,3).join(' ');
+    if(!kw.trim()||kw.trim().length<4)kw='related products';
+    var url='https://www.amazon.com/s?k='+encodeURIComponent(kw.trim().substr(0,80));
+    chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:url},function(sr){
+      if(sr&&sr.success){
+        var asins=exA(sr.html);
+        var added=0;
+        asins.forEach(function(a){if(!fsSeenASIN[a]&&queue.length<fsTarget*3){fsSeenASIN[a]=true;queue.push(a);added++;}});
+        notifyPopup({type:'fission-progress',phase:'store',msg:'🔍 关键词补充: +'+added+' ASINs | '+fsProducts.length+'/'+fsTarget,pct:Math.min(90,2+Math.round(fsProducts.length/fsTarget*85))});
+      }
+      setTimeout(processNext,1000);
     });
   }
 
@@ -211,8 +232,14 @@ function sp(url, cb) {
 }
 
 function exA(h) {
-  var a = [], re = /data-asin="([A-Z0-9]{10})"/g, m;
-  while ((m = re.exec(h)) !== null) { if (!fissionSeen[m[1]]) { fissionSeen[m[1]] = true; a.push(m[1]); } }
+  var a = [], seen = {};
+  var re = /data-asin="([A-Z0-9]{10})"/g, m;
+  while ((m = re.exec(h)) !== null) { if (!seen[m[1]]) { seen[m[1]] = true; a.push(m[1]); } }
+  // Fallback: /dp/ URLs for store pages (no data-asin attributes)
+  if (a.length < 3) {
+    var re2 = /\/dp\/([A-Z0-9]{10})/g;
+    while ((m = re2.exec(h)) !== null) { if (!seen[m[1]]) { seen[m[1]] = true; a.push(m[1]); } }
+  }
   return a;
 }
 
@@ -257,6 +284,8 @@ function fd(asin, cb) {
     if (!img) { im = h.match(/"large"\s*:\s*"([^"]+)"/); if (im) img = im[1]; }
     if (!img) { im = h.match(/"mainImageUrl"\s*:\s*"([^"]+)"/); if (im) img = im[1]; }
     if (!img) { im = h.match(/<img[^>]*id="landingImage"[^>]*data-old-hires="([^"]+)"/); if (im) img = im[1]; }
+    if (!img) { im = h.match(/<img[^>]+src="([^"]*\/images\/I\/[^"]+)"/i); if (im) img = im[1]; }
+    if (!img) { im = h.match(/https:\/\/[^"]*amazon[^"]*\/images\/I\/[^"]+/i); if (im) img = im[0]; }
     if (img && img.startsWith('//')) img = 'https:' + img;
     var kw = ''; if (t) { var wds = t.split(/\s+/).filter(function(w) { return w.length > 4 }); kw = wds.slice(0, 3).join(' '); }
     if (br && br.length > 1 && br !== 'Generic' && !kw) kw = br;
