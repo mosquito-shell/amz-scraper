@@ -4,10 +4,8 @@
 'use strict';
 
 var tmCache = {};
-var fissionRunning = false, fissionSeen = {}, fissionQueue = [], fissionEnriched = [];
-var fissionDone = 0, fissionTotal = 0, fissionTarget = 0, fissionActiveTab = null;
-var fissionCb = {}; // keyword expansion counter
-var fissionFilters = {}; // user-selected filters
+var fissionActiveTab = null;
+var fissionRunning = false; // legacy compat (used by popup's own fissionRunning)
 
 // === Export state (类目导出, 后台运行不中断) ===
 var exportRunning = false, exportProducts = [], exportTotal = 0, exportDone = 0, exportTab = null;
@@ -37,17 +35,18 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     return false;
   }
   if (request.action === 'cancelFission') {
-    fissionRunning = false;
+    fsRunning = false; fissionRunning = false;
+    clearTimeout(fsWatchdog);
     sendResponse({ ok: true });
     return false;
   }
   if (request.action === 'getFissionState') {
     sendResponse({
-      running: fissionRunning,
-      enriched: fissionEnriched,
-      done: fissionDone,
-      total: fissionTotal,
-      queueSize: fissionQueue.length
+      running: fsRunning || fissionRunning,
+      enriched: fsProducts,
+      done: fsProducts.length,
+      total: fsTarget,
+      queueSize: fsKws.length
     });
     return false;
   }
@@ -75,62 +74,56 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   return false;
 });
 
-// === 裂变搜索: 关键词搜索 → 批量 enrichBatch → 一次返回 ===
-var fsProducts=[], fsSeenASIN={}, fsTarget=0, fsRunning=false, fsAllRawASINs=[], fsWatchdog=null;
+// === 裂变搜索: 纯 SPA 关键词扩散 (稳定版) ===
+var fsProducts=[], fsSeenASIN={}, fsTarget=0, fsRunning=false, fsKws=[], fsUsedKws={}, fsKi=0, fsConsecutive=0, fsWatchdog=null;
 
 function startFission(seed, target, filters, sender){
   if(fsRunning)return;
-  fsRunning=true;fsProducts=[];fsSeenASIN={};fsTarget=target;fsAllRawASINs=[];fsConsecutive=0;
-  notifyPopup({type:'fission-progress',phase:'search',msg:'🔍 种子: '+seed+' | 0/'+target,pct:2});
+  fsRunning=true;fsProducts=[];fsSeenASIN={};fsTarget=target;
+  fsKws=[seed];fsUsedKws={};fsKi=0;fsConsecutive=0;
 
-  // 5分钟看门狗
+  notifyPopup({type:'fission-progress',phase:'search',msg:'种子: '+seed+' | 0/'+target,pct:2});
+
   fsWatchdog=setTimeout(function(){if(fsRunning)finishFission();},300000);
 
-  // 直接用种子 ASIN 作为第一个关键词去搜
-  expandLoop([seed]);
+  // 延迟100ms确保popup listener已注册
+  setTimeout(expandLoop, 200);
 
   function extractKeywords(p){
-    var words=(p.title||'').toLowerCase().split(/[\s\/\-]+/).filter(function(w){return w.length>4&&!/^\d/.test(w);});
-    var br=(p.brand||'').toLowerCase().replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();
-    if(br&&br.length>2&&br!=='generic')words.unshift(br);
-    var seen={},u=[];
-    words.forEach(function(w){if(!seen[w]){seen[w]=true;u.push(w);}});
+    var t=(p.title||'').toLowerCase();var b=(p.brand||'').toLowerCase().replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();
+    var w=t.split(/[\s\/\-]+/).filter(function(w){return w.length>4&&!/^\d/.test(w);});
+    if(b&&b.length>2&&b!=='generic')w.unshift(b);
+    var s={},u=[];w.forEach(function(x){if(!s[x]){s[x]=true;u.push(x);}});
     return u;
   }
 
-  var usedKws={}, kv=0;
-  function expandLoop(kws){
+  function expandLoop(){
     if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
-    if(fsConsecutive++>15){finishFission();return;}
+    if(fsConsecutive++>20){finishFission();return;}
 
-    var kw=kws[kv++];if(!kw){kv=0;kw=kws[kv];}
-    if(!kw||usedKws[kw]){setTimeout(function(){expandLoop(kws);},200);return;}
-    usedKws[kw]=true;fsConsecutive=0;
+    // 取下一个关键词
+    if(fsKi>=fsKws.length){fsKi=0;}
+    var kw=fsKws[fsKi++];
+    if(!kw||fsUsedKws[kw]){setTimeout(expandLoop,200);return;}
+    fsUsedKws[kw]=true;fsConsecutive=0;
 
     var url='https://www.amazon.com/s?k='+encodeURIComponent(kw);
-    notifyPopup({type:'fission-progress',phase:'search',msg:'🔍 搜索: '+kw+' | '+fsProducts.length+'/'+fsTarget,pct:10+Math.round(fsProducts.length/fsTarget*20)});
+    notifyPopup({type:'fission-progress',phase:'search',msg:'搜索: '+kw+' | '+fsProducts.length+'/'+fsTarget,pct:10+Math.round(fsProducts.length/fsTarget*20)});
 
     chrome.tabs.sendMessage(fissionActiveTab,{action:'fetchSearch',url:url},function(sr){
-      if(!sr||!sr.success){fsConsecutive++;setTimeout(function(){expandLoop(kws);},500);return;}
+      if(!sr||!sr.success){fsConsecutive++;setTimeout(expandLoop,800);return;}
       var fresh=exA(sr.html).filter(function(a){return!fsSeenASIN[a];});
       fresh.forEach(function(a){fsSeenASIN[a]=true;});
-      if(!fresh.length){fsConsecutive++;setTimeout(function(){expandLoop(kws);},500);return;}
+      if(!fresh.length){fsConsecutive++;setTimeout(expandLoop,800);return;}
 
-      // 用 enrichBatch 一次性抓所有新 ASIN 的详情
-      var batchSize=Math.min(fresh.length,fsTarget-fsProducts.length+10);
-      chrome.tabs.sendMessage(fissionActiveTab,{action:'enrichBatch',asins:fresh.slice(0,batchSize)},function(result){
+      var batch=Math.min(fresh.length,fsTarget-fsProducts.length+20);
+      chrome.tabs.sendMessage(fissionActiveTab,{action:'enrichBatch',asins:fresh.slice(0,batch)},function(result){
         if(result&&result.success&&result.products){
-          result.products.forEach(function(d){
-            if(d&&d.title){fsProducts.push(d);fsConsecutive=0;}
-          });
+          result.products.forEach(function(d){if(d&&d.title){fsProducts.push(d);fsConsecutive=0;}});
         }
-        // 从新商品提取关键词继续扩散
-        fsProducts.slice(-5).forEach(function(p){
-          extractKeywords(p).forEach(function(w){if(!usedKws[w]){kws.push(w);}});
-        });
-        var pct=10+Math.round(fsProducts.length/fsTarget*85);
-        notifyPopup({type:'fission-progress',phase:'detail',msg:'📦 '+fsProducts.length+'/'+fsTarget+' products',pct:Math.min(pct,99)});
-        setTimeout(function(){expandLoop(kws);},300);
+        fsProducts.slice(-5).forEach(function(p){extractKeywords(p).forEach(function(w){if(!fsUsedKws[w]){fsKws.push(w);}});});
+        notifyPopup({type:'fission-progress',phase:'detail',msg:'已抓 '+fsProducts.length+'/'+fsTarget,pct:10+Math.round(Math.min(fsProducts.length/fsTarget,0.99)*88)});
+        setTimeout(expandLoop,300);
       });
     });
   }
@@ -138,7 +131,7 @@ function startFission(seed, target, filters, sender){
   function finishFission(){
     if(!fsRunning)return;clearTimeout(fsWatchdog);
     fsProducts.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();});
-    notifyPopup({type:'fission-done',products:fsProducts,msg:'✅ 裂变完成: '+fsProducts.length+' 个商品'});
+    notifyPopup({type:'fission-done',products:fsProducts,msg:'裂变完成: '+fsProducts.length});
     fsRunning=false;
   }
 }
@@ -187,19 +180,6 @@ function startExport(count, sender) {
   });
 }
 
-// === 搜索页 fetch ===
-function sp(url, cb) {
-  var tab = fissionActiveTab || exportTab;
-  if (!tab) { cb([]); return; }
-  chrome.tabs.sendMessage(tab, { action: 'fetchSearch', url: url }, function(r) {
-    if (r && r.success) {
-      var a = exA(r.html);
-      a.forEach(function(x) { fissionQueue.push(x); });
-      cb(a);
-    } else { cb([]); }
-  });
-}
-
 function exA(h) {
   var a = [], seen = {};
   var re = /data-asin="([A-Z0-9]{10})"/g, m;
@@ -210,60 +190,6 @@ function exA(h) {
     while ((m = re2.exec(h)) !== null) { if (!seen[m[1]]) { seen[m[1]] = true; a.push(m[1]); } }
   }
   return a;
-}
-
-// === 详情页 fetch ===
-function fd(asin, cb) {
-  var tab = fissionActiveTab || exportTab;
-  if (!tab) { cb({ asin: asin, kw: 'related', link: 'https://www.amazon.com/dp/' + asin }); return; }
-  chrome.tabs.sendMessage(tab, { action: 'fetchSearch', url: 'https://www.amazon.com/dp/' + asin }, function(r) {
-    if (!r || !r.success || !r.html || r.html.length < 5000) {
-      cb({ asin: asin, kw: 'related', link: 'https://www.amazon.com/dp/' + asin });
-      return;
-    }
-    var h = r.html;
-    var t = '', bm = h.match(/id="productTitle"[^>]*>([^<]+)/); if (bm) t = bm[1].trim();
-    var br = '', brM = h.match(/id="bylineInfo"[^>]*>([^<]+)/);
-    if (brM) br = brM[1].trim().replace(/Visit the /, '').replace(/ Store/, '');
-    if (!br) { var b2 = h.match(/Brand<\/[^>]*>\s*<[^>]*>\s*([^<]+)/i); if (b2) br = b2[1].trim(); }
-    if (!br) { var b3 = h.match(/data-feature-name="bylineInfo"[^>]*>\s*([^<]+)/i); if (b3) br = b3[1].trim(); }
-    if (!br) { var b4 = h.match(/href="[^"]*\/stores\/[^"]*"[^>]*>\s*([^<]+)<\/a>/i); if (b4) br = b4[1].trim(); }
-    var pr = '', prM = h.match(/priceblock_ourprice[^>]*>\$(\d+\.?\d{0,2})/);
-    if (!prM) prM = h.match(/a-price-whole[^>]*>(\d+)[^<]*<[^>]*a-price-fraction[^>]*>(\d+)/);
-    if (prM && prM[2]) pr = prM[1] + '.' + prM[2];
-    if (!prM) { var cm = h.match(/id="corePrice[^"]*"[^>]*>[^$]*\$(\d+\.?\d{0,2})/); if (cm) pr = cm[1]; }
-    if (!pr) { var bm2 = h.match(/>\$(\d+\.?\d{0,2})</); if (bm2) pr = bm2[1]; }
-    var ra = '', raM = h.match(/(\d\.\d).*?out of 5/i); if (raM) ra = raM[1];
-    var rv = '', rvM = h.match(/([\d,]+)\s*(?:rating|review)/i); if (rvM) rv = rvM[1].replace(/,/g, '');
-    var bs = '', bsM = h.match(/Best Sellers Rank[^#]*#([\d,]+)/); if (bsM) bs = bsM[1];
-    var wt = '', wtM = h.match(/Item Weight[^>]*>\s*(\d+\.?\d*)\s*(pounds?|ounces?|kg|Pounds?|Ounces?|g)/i);
-    if (!wtM) wtM = h.match(/Weight[:\s]*\s*(\d+\.?\d*)\s*(pounds?|ounces?|kg)/i);
-    if (wtM) { var wv = parseFloat(wtM[1]), wu = wtM[2].toLowerCase(); wv = /ounce/.test(wu) ? +(wv / 35.274).toFixed(2) : /pound/.test(wu) ? +(wv / 2.205).toFixed(2) : wv; wt = parseFloat(wv) + ' kg'; }
-    var dm = '', dmM = h.match(/Dimensions[^<]*<\/(?:span|td)[^>]*>\s*<[^>]*>\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(inches?|cm)?/i);
-    if (!dmM) dmM = h.match(/Dimensions[:\s]*\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*x\s*(\d+\.?\d*)\s*(inches?|cm)?/i);
-    if (dmM) { var dl2 = parseFloat(dmM[1]), dw = parseFloat(dmM[2]), dh = parseFloat(dmM[3]), du = (dmM[4] || '').toLowerCase(); if (du.indexOf('in') >= 0) { dl2 = Math.round(dl2 * 2.54 * 10) / 10; dw = Math.round(dw * 2.54 * 10) / 10; dh = Math.round(dh * 2.54 * 10) / 10; } dm = dl2 + 'x' + dw + 'x' + dh; }
-    var mo = '', moM = h.match(/(\d+[Kk]?\+?)\s*bought in past month/i); if (moM) mo = moM[1];
-    var sh = ''; if (/prime|fulfillment by amazon/i.test(h)) sh = 'FBA'; else if (/free shipping/i.test(h)) sh = 'MFN';
-    var isBS = /best seller|#1 best/i.test(h) ? 1 : 0;
-    // 多层图片提取 (Match sidepanel/content.js patterns)
-    var img = '';
-    var im = h.match(/"hiRes"\s*:\s*"([^"]+)"/) || h.match(/"hiRes"[^"]*"([^"]+)"/);
-    if (im) { img = im[1]; }
-    if (!img) { im = h.match(/id="landingImage"[^>]*src="([^"]+)"/); if (im) img = im[1]; }
-    if (!img) { im = h.match(/id="imgTagWrapperId"[^>]*<img[^>]*src="([^"]+)"/); if (im) img = im[1]; }
-    if (!img) { im = h.match(/"large"\s*:\s*"([^"]+)"/); if (im) img = im[1]; }
-    if (!img) { im = h.match(/"mainImageUrl"\s*:\s*"([^"]+)"/); if (im) img = im[1]; }
-    if (!img) { im = h.match(/<img[^>]*id="landingImage"[^>]*data-old-hires="([^"]+)"/); if (im) img = im[1]; }
-    if (!img) { im = h.match(/<img[^>]+src="([^"]*\/images\/I\/[^"]+)"/i); if (im) img = im[1]; }
-    if (!img) { im = h.match(/https:\/\/[^"]*amazon[^"]*\/images\/I\/[^"]+/i); if (im) img = im[0]; }
-    if (img && img.startsWith('//')) img = 'https:' + img;
-    var kw = ''; if (t) { var wds = t.split(/\s+/).filter(function(w) { return w.length > 4 }); kw = wds.slice(0, 3).join(' '); }
-    if (br && br.length > 1 && br !== 'Generic' && !kw) kw = br;
-    br = br.replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi, '').trim();
-    var sc = 0, scM = h.match(/(\d+)\s*(?:new|other\s*seller|offer)/i) || h.match(/(\d+)\s*(?:from|seller)/i); if (scM) sc = parseInt(scM[1]) || 0;
-    var stk = 0, stkM = h.match(/In Stock[^0-9]*(\d+)/i) || h.match(/(\d+)\s*(?:left|remain)/i); if (stkM) stk = parseInt(stkM[1]) || 0;
-    cb({ asin: asin, title: t, brand: br, price: pr, rating: ra, reviews: rv, bsr: bs, weight: wt, dims: dm, monthly: mo, image: img, link: 'https://www.amazon.com/dp/' + asin, kw: kw, shipping: sh, bs: isBS, sellerCount: sc, stock: stk });
-  });
 }
 
 // === 商标查询 ===
