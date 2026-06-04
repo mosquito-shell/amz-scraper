@@ -1046,19 +1046,34 @@ function renderFinance(){
   var finData=DATA.map(function(p){return calcProductMetrics(p);});
   finData.sort(function(a,b){return b.monthProfit-a.monthProfit});
   var totalProfit=finData.reduce(function(s,f){return s+f.monthProfit},0);
+  var totalCapital=finData.reduce(function(s,f){return s+f.C},0);
   var avgROI=finData.length?Math.round(finData.reduce(function(s,f){return s+f.roi},0)/finData.length):0;
+  var wROIC=totalCapital>0?Math.round(finData.reduce(function(s,f){return s+f.roi*f.C},0)/totalCapital*(365/Math.max(1,finData[0]?finData[0].T:39))):0;
   var posCount=finData.filter(function(f){return f.roi>0}).length;
   var avgT=finData.length?Math.round(finData.reduce(function(s,f){return s+f.T},0)/finData.length):39;
   var filledCount=Object.keys(USER_DATA).filter(function(k){return DATA.some(function(p){return p.asin===k});}).length;
 
+  // B: 运营级分组 + 公司汇总
+  var ops={};
+  finData.forEach(function(f){var g=f.category.split(',')[0].trim().substr(0,16)||'其他';if(!ops[g])ops[g]={products:[],TMNP:0,TMC:0};ops[g].products.push(f);ops[g].TMNP+=f.MNP;ops[g].TMC+=f.MC;});
+  var opsCards=''; var totalTMNP=0, totalTMC=0;
+  Object.keys(ops).sort(function(a,b){return ops[b].TMNP-ops[a].TMNP}).forEach(function(g){
+    var o=ops[g]; totalTMNP+=o.TMNP; totalTMC+=o.TMC;
+    opsCards+='<div style="background:#f6ffed;padding:8px 14px;border-radius:8px;flex:1;min-width:140px;text-align:center"><b style="font-size:11px">'+g+'</b><br><span style="font-size:15px;font-weight:bold;color:'+(o.TMNP>0?'#52c41a':'#ff4d4f')+'">$'+o.TMNP.toLocaleString()+'</span><br><span style="font-size:9px;color:#888">TMNP('+o.products.length+'款) | TMC:$'+o.TMC.toLocaleString()+'</span></div>';
+  });
+  document.getElementById('finOpsRow').style.display='';
+  document.getElementById('finOpsCards').innerHTML=opsCards||'<span style="color:#999">等待数据...</span>';
+
   document.getElementById('finStats').innerHTML=
-    '<div class="stat-card"><div class="icon green">💰</div><div class="info"><div class="num">$'+totalProfit.toLocaleString()+'</div><div class="label">预估月利润 | 已录入'+filledCount+'款</div></div></div>'+
-    '<div class="stat-card"><div class="icon blue">📈</div><div class="info"><div class="num">'+avgROI+'%</div><div class="label">平均 ROI</div></div></div>'+
-    '<div class="stat-card"><div class="icon purple">✅</div><div class="info"><div class="num">'+posCount+'/'+finData.length+'</div><div class="label">盈利品种</div></div></div>'+
-    '<div class="stat-card"><div class="icon orange">⏱</div><div class="info"><div class="num">'+avgT+'天</div><div class="label">平均周转天数</div></div></div>';
+    '<div class="stat-card"><div class="icon green">💰</div><div class="info"><div class="num">$'+totalProfit.toLocaleString()+'</div><div class="label">TMNP(运营总净利)</div></div></div>'+
+    '<div class="stat-card"><div class="icon blue">🏦</div><div class="info"><div class="num">$'+totalCapital.toLocaleString()+'</div><div class="label">TMC(总资金占用)</div></div></div>'+
+    '<div class="stat-card"><div class="icon purple">📊</div><div class="info"><div class="num">'+wROIC+'%</div><div class="label">加权年化ROIC</div></div></div>'+
+    '<div class="stat-card"><div class="icon green">📈</div><div class="info"><div class="num">'+avgROI+'%</div><div class="label">平均ROI | '+posCount+'/'+finData.length+'盈利</div></div></div>'+
+    '<div class="stat-card"><div class="icon orange">⏱</div><div class="info"><div class="num">'+avgT+'天</div><div class="label">加权周转 | 录入'+filledCount+'款</div></div></div>'+
+    '<div class="stat-card"><div class="icon blue">🔄</div><div class="info"><div class="num">'+Math.round(365/Math.max(1,avgT)*10)/10+'次</div><div class="label">年周转(ITO)</div></div></div>';
 
   var tbody=document.querySelector('#finTable tbody');
-  var paramsRow='<tr style="background:#fafafa;font-size:10px"><td colspan="19">'+
+  var paramsRow='<tr style="background:#fafafa;font-size:10px"><td colspan="22">'+
     '<b>全局参数:</b> 佣金<input type="number" value="'+Math.round(cfg.commission*100)+'" style="width:45px" onchange="updateFinParam(\'commission\',this.value/100)">% '+
     '运费¥<input type="number" value="'+cfg.freightPerKg+'" style="width:45px" onchange="updateFinParam(\'freightPerKg\',parseFloat(this.value))">/kg '+
     '汇率<input type="number" value="'+cfg.exchangeRate+'" style="width:45px" step="0.1" onchange="updateFinParam(\'exchangeRate\',parseFloat(this.value))"> '+
@@ -1073,14 +1088,19 @@ function renderFinance(){
   var rows=finData.map(function(f){var cls=f.roi>80?'score-high':(f.roi>30?'score-mid':(f.roi<0?'score-low':''));
     var ud=USER_DATA[f.asin]||{};
     var filled=ud.cost!==undefined||ud.sales!==undefined?'★':'';
-    return'<tr class="'+cls+'"><td>'+f.asin+filled+'</td><td title="'+f.title+'">'+f.title.substr(0,22)+'</td>'+
+    var sku=ud.sku||(f.asin||'').substr(0,7);
+    var storageCost=cfg.storageCostPerUnit||0.50;
+    var returnLoss=f.returnLoss||0;
+    return'<tr class="'+cls+'"><td>'+f.asin+filled+'</td><td style="font-size:9px;color:#888">'+f.asin.substr(-7)+'</td><td title="'+f.title+'">'+f.title.substr(0,22)+'</td>'+
     '<td>$'+f.price+'</td>'+
-    '<td><input type="number" value="'+ud.cost+'" placeholder="'+(f.cost)+'" style="width:55px;font-size:10px;background:#fffbe6" step="0.1" onchange="saveUserData(\''+f.asin+'\',\'cost\',parseFloat(this.value)||0);renderFinance()"></td>'+
-    '<td><input type="number" value="'+ud.sales+'" placeholder="'+(f.sales)+'" style="width:55px;font-size:10px;background:#fffbe6" onchange="saveUserData(\''+f.asin+'\',\'sales\',parseInt(this.value)||0);renderFinance()"></td>'+
-    '<td><input type="number" value="'+ud.fba+'" placeholder="'+(f.fba)+'" style="width:50px;font-size:10px;background:#fffbe6" step="0.1" onchange="saveUserData(\''+f.asin+'\',\'fba\',parseFloat(this.value)||0);renderFinance()"></td>'+
-    '<td><input type="number" value="'+ud.freight+'" placeholder="'+(f.freight)+'" style="width:50px;font-size:10px;background:#fffbe6" step="0.1" onchange="saveUserData(\''+f.asin+'\',\'freight\',parseFloat(this.value)||0);renderFinance()"></td>'+
+    '<td><input type="number" value="'+ud.cost+'" placeholder="'+(f.cost)+'" style="width:50px;font-size:10px;background:#fffbe6" step="0.1" onchange="saveUserData(\''+f.asin+'\',\'cost\',parseFloat(this.value)||0);renderFinance()"></td>'+
+    '<td><input type="number" value="'+ud.sales+'" placeholder="'+(f.sales)+'" style="width:50px;font-size:10px;background:#fffbe6" onchange="saveUserData(\''+f.asin+'\',\'sales\',parseInt(this.value)||0);renderFinance()"></td>'+
+    '<td><input type="number" value="'+ud.fba+'" placeholder="'+(f.fba)+'" style="width:45px;font-size:10px;background:#fffbe6" step="0.1" onchange="saveUserData(\''+f.asin+'\',\'fba\',parseFloat(this.value)||0);renderFinance()"></td>'+
+    '<td><input type="number" value="'+ud.freight+'" placeholder="'+(f.freight)+'" style="width:45px;font-size:10px;background:#fffbe6" step="0.1" onchange="saveUserData(\''+f.asin+'\',\'freight\',parseFloat(this.value)||0);renderFinance()"></td>'+
     '<td style="font-size:10px;color:#cf1322">$'+f.tariff.toFixed(2)+'<br><span style="color:#888">'+f.tariffRate+'%</span></td>'+
     '<td>$'+f.commission.toFixed(2)+'</td>'+
+    '<td style="font-size:10px;color:#888">$'+storageCost.toFixed(2)+'</td>'+
+    '<td style="font-size:10px;color:#888">$'+returnLoss.toFixed(2)+'</td>'+
     '<td style="color:'+(f.np>0?'green':'red')+'"><b>$'+f.np.toFixed(2)+'</b></td>'+
     '<td style="color:'+(f.monthProfit>0?'green':'red')+'">$'+(f.monthProfit<0?'-':'')+Math.abs(f.monthProfit).toLocaleString()+'</td>'+
     '<td>$'+f.C.toLocaleString()+'</td>'+
@@ -1090,6 +1110,33 @@ function renderFinance(){
     '<td>'+f.annualROIC+'%</td></tr>';
   }).join('');
   tbody.innerHTML=paramsRow+rows;
+
+  // C: 环比/同比趋势 (从每日快照数据加载)
+  document.getElementById('finTrendRow').style.display='';
+  fetch(API_BASE+'/api/daily-snapshot')
+    .then(function(r){return r.json();})
+    .then(function(snapshots){
+      var last=snapshots[snapshots.length-1]||{};
+      var prev=snapshots[snapshots.length-2]||{};
+      var trends=[
+        {name:'产品总数',unit:'个',now:finData.length,prev:prev.productCount||finData.length,yoy:snapshots[0]?snapshots[0].productCount||finData.length:finData.length},
+        {name:'高分占比(≥70)',unit:'%',now:Math.round(finData.filter(function(p){return p._score>=70;}).length/Math.max(1,finData.length)*100),prev:prev.highScore?Math.round(prev.highScore/Math.max(1,prev.productCount)*100):0,yoy:0},
+        {name:'平均分',unit:'',now:Math.round(finData.reduce(function(s,p){return s+(p._score||p.score||0);},0)/Math.max(1,finData.length)),prev:prev.avgScore||0,yoy:0},
+        {name:'总月利润(TMNP)',unit:'$',now:totalProfit,prev:prev.profit||0,yoy:0},
+        {name:'加权ROIC',unit:'%',now:wROIC,prev:0,yoy:0},
+        {name:'周转天数(T)',unit:'天',now:avgT,prev:0,yoy:0},
+      ];
+      var trendTbody=document.querySelector('#finTrendTable tbody');
+      trendTbody.innerHTML=trends.map(function(t){
+        var mom=t.prev?Math.round((t.now-t.prev)/Math.max(1,Math.abs(t.prev))*100):0;
+        var yoy=t.yoy?Math.round((t.now-t.yoy)/Math.max(1,Math.abs(t.yoy))*100):0;
+        return '<tr><td><b>'+t.name+'</b></td><td>'+t.now+t.unit+'</td><td>'+(t.prev||'--')+t.unit+'</td><td style="color:'+(mom>0?'green':(mom<0?'red':'#888'))+'">'+(mom!==0?(mom>0?'+':'')+mom+'%':'--')+'</td><td>'+'--'+'</td><td style="color:#888">--</td><td>'+(mom>5?'📈':(mom<-5?'📉':'➡'))+'</td></tr>';
+      }).join('');
+    })
+    .catch(function(){
+      var trendTbody=document.querySelector('#finTrendTable tbody');
+      trendTbody.innerHTML='<tr><td colspan="7" style="text-align:center;color:#999">加载快照数据中... 运行 POST /api/daily-snapshot 生成历史</td></tr>';
+    });
 }
 
 

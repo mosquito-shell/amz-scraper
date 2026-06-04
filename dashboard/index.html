@@ -179,9 +179,23 @@ input[type=text]:focus,input[type=url]:focus,input[type=number]:focus,select:foc
     <!-- ====== Finance ====== -->
     <div class="page" id="page-finance">
       <div class="stats-grid" id="finStats"></div>
+      <!-- 运营级 + 公司级汇总 -->
+      <div class="chart-row" id="finOpsRow" style="display:none">
+        <div class="panel" style="grid-column:1/-1">
+          <div class="head">运营级 & 公司级汇总 <span class="extra">按品类/品牌加权聚合 | 全站 TMNP/TMC/加权ROIC</span></div>
+          <div style="display:flex;gap:12px;padding:12px;flex-wrap:wrap" id="finOpsCards"></div>
+        </div>
+      </div>
       <div class="panel">
-        <div class="head">单品利润分析 <span class="extra">NP/ROI/T/MNP/MC/ITO 六维产品级指标</span></div>
-        <div class="table-wrap"><table id="finTable"><thead><tr><th>ASIN</th><th>标题</th><th>售价</th><th style="background:#fffbe6">采购✎</th><th style="background:#fffbe6">销量✎</th><th style="background:#fffbe6">FBA费✎</th><th style="background:#fffbe6">头程✎</th><th>关税</th><th>佣金</th><th>NP</th><th>月利润</th><th>资金C</th><th>ROI%</th><th>T</th><th>ITO</th><th>MNP</th><th>MC</th><th>ROIC</th></tr></thead><tbody></tbody></table></div>
+        <div class="head">单品利润分析 <span class="extra">NP/ROI/T/MNP/MC/ITO 六维 + SKU/仓储/退货</span></div>
+        <div class="table-wrap"><table id="finTable"><thead><tr><th>ASIN</th><th>SKU</th><th>标题</th><th>售价</th><th style="background:#fffbe6">采购✎</th><th style="background:#fffbe6">销量✎</th><th style="background:#fffbe6">FBA费✎</th><th style="background:#fffbe6">头程✎</th><th>关税</th><th>佣金</th><th>仓储</th><th>退货</th><th>NP</th><th>月利润</th><th>资金C</th><th>ROI%</th><th>T</th><th>ITO</th><th>MNP</th><th>MC</th><th>ROIC</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <!-- 环比/同比趋势 -->
+      <div class="chart-row" id="finTrendRow" style="display:none">
+        <div class="panel" style="grid-column:1/-1">
+          <div class="head">环比/同比趋势对比 <span class="extra">本期 vs 上期 vs 去年同期 (模拟)</span></div>
+          <div class="table-wrap"><table id="finTrendTable"><thead><tr><th>指标</th><th>本期</th><th>上期</th><th>环比%</th><th>去年同期</th><th>同比%</th><th>趋势</th></tr></thead><tbody></tbody></table></div>
+        </div>
       </div>
     </div>
 
