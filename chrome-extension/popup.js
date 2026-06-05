@@ -468,9 +468,9 @@ chrome.runtime.onMessage.addListener(function(msg){
       if(sellerMin>0&&(p._sellerCount||0)<sellerMin)return false;return true;
     });
     filtered.sort(function(a,b){return(b.score||0)-(a.score||0)});
-    var added=mergeProducts(fsProducts,filtered);
+    fsProducts=filtered; // 每次裂变搜索替换，不累加
     sDL('fs-download',filtered,'fission');rWB(fsProducts,'fs-wb-table','fs-wb-count','fs');
-    var st=document.getElementById('fs-status');if(st)st.textContent='+'+added+' new (total '+fsProducts.length+') filtered:'+filtered.length;
+    var st=document.getElementById('fs-status');if(st)st.textContent='完成: '+filtered.length+' 件商品';
     var pb2=document.getElementById('fs-progress');if(pb2)pb2.style.display='none';
     var fsBtn=document.getElementById('fs-create');if(fsBtn){fsBtn.textContent='创建并开始';fsBtn.disabled=false;}
     fissionRunning=false;
@@ -509,11 +509,12 @@ document.addEventListener('DOMContentLoaded',function(){
       document.getElementById('fs-create').textContent='运行中...';
       fissionRunning=true;
     } else if(state.enriched && state.enriched.length>0){
-      // fission done but popup missed fission-done message → render now
-      var fsProds=state.enriched;
-      fsProds.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);});
-      var added=mergeProducts(fsProducts,fsProds);
+      // fission done but popup missed fission-done message → replace (not merge)
+      fsProducts=state.enriched;
+      fsProducts.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);});
+      fsProducts.sort(function(a,b){return(b.score||0)-(a.score||0);});
       rWB(fsProducts,'fs-wb-table','fs-wb-count','fs');
+      sDL('fs-download',fsProducts,'fission');
       var st2=document.getElementById('fs-status');
       if(st2){st2.style.display='block';st2.textContent='恢复完成: '+fsProducts.length+' 件商品';st2.className='status-bar';}
     }

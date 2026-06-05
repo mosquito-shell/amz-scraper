@@ -132,7 +132,7 @@ function startFission(seed, target, filters, sender){
       if(!fresh.length){fsConsecutive++;setTimeout(expandLoop,800);return;}
 
       // enrichBatch: content.js 一次性批量抓详情
-      var batch=Math.min(fresh.length, fsTarget-fsProducts.length+20);
+      var batch=Math.min(fresh.length, Math.max(0, fsTarget-fsProducts.length));
       chrome.tabs.sendMessage(fissionActiveTab,{action:'enrichBatch',asins:fresh.slice(0,batch)},function(result){
         if(!fsRunning) return;
         if(result&&result.success&&result.products){
