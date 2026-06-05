@@ -1,17 +1,19 @@
 /**
- * 后台 Service Worker — 商标查询 + 裂变搜索 + 代理
+ * 后台 Service Worker — 商标查询 + 裂变搜索 + 类目导出
  */
 'use strict';
 
 var tmCache = {};
 var fissionActiveTab = null;
-var fissionRunning = false; // legacy compat (used by popup's own fissionRunning)
+var fissionRunning = false;
 
-// === Export state (类目导出, 后台运行不中断) ===
-var exportRunning = false, exportProducts = [], exportTotal = 0, exportDone = 0, exportTab = null;
+// === Export state ===
+var exportRunning = false, exportProducts = [], exportTotal = 0, exportTab = null;
+
+// === Fission state ===
+var fsProducts=[], fsSeenASIN={}, fsTarget=0, fsRunning=false, fsKws=[], fsUsedKws={}, fsKi=0, fsConsecutive=0, fsWatchdog=null;
 
 chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
-  // === 商标 ===
   if (request.action === 'checkTrademark') {
     checkTrademark(request.brand, function(result) { sendResponse(result); });
     return true;
@@ -20,14 +22,12 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     checkTrademarksBatch(request.brands, function(results) { sendResponse(results); });
     return true;
   }
-  // === 裂变搜索 ===
   if (request.action === 'startFission') {
     fissionActiveTab = request.tabId || (sender.tab ? sender.tab.id : null);
     startFission(request.seed, request.target, request.filters, sender);
     sendResponse({ ok: true });
     return false;
   }
-  // F: 店铺遍历裂变
   if (request.action === 'startFissionSeller') {
     fissionActiveTab = request.tabId || (sender.tab ? sender.tab.id : null);
     startFissionSeller(request.seed, request.target, sender);
@@ -50,7 +50,6 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     });
     return false;
   }
-  // === 类目导出 (后台运行, 不中断) ===
   if (request.action === 'startExport') {
     exportTab = request.tabId || (sender.tab ? sender.tab.id : null);
     startExport(request.count || 50, sender);
@@ -66,7 +65,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
     sendResponse({
       running: exportRunning,
       products: exportProducts,
-      done: exportDone,
+      done: exportProducts.length,
       total: exportTotal
     });
     return false;
@@ -74,26 +73,43 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   return false;
 });
 
-// === 裂变搜索: 纯 SPA 关键词扩散 (稳定版) ===
-var fsProducts=[], fsSeenASIN={}, fsTarget=0, fsRunning=false, fsKws=[], fsUsedKws={}, fsKi=0, fsConsecutive=0, fsWatchdog=null;
+function notifyPopup(data) {
+  try { chrome.runtime.sendMessage(data); } catch(e) { /* popup closed */ }
+}
+
+// ============================================================
+// 裂变搜索: 种子 → getDetail 拿标题 → 用标题词搜索 → enrichBatch
+// ============================================================
 
 function startFission(seed, target, filters, sender){
-  if(fsRunning)return;
-  fsRunning=true;fsProducts=[];fsSeenASIN={};fsTarget=target;
-  fsKws=[seed];fsUsedKws={};fsKi=0;fsConsecutive=0;
+  if(fsRunning) return;
+  fsRunning=true; fsProducts=[]; fsSeenASIN={}; fsTarget=target;
+  fsKws=[]; fsUsedKws={}; fsKi=0; fsConsecutive=0;
+  fsSeenASIN[seed]=true;
 
-  notifyPopup({type:'fission-progress',phase:'search',msg:'种子: '+seed+' | 0/'+target,pct:2});
-
+  notifyPopup({type:'fission-progress',phase:'search',msg:'种子: '+seed+' | 获取标题...',pct:2});
   fsWatchdog=setTimeout(function(){if(fsRunning)finishFission();},300000);
 
-  // 延迟100ms确保popup listener已注册
-  setTimeout(expandLoop, 200);
+  // Step1: 用 enrichBatch 拿种子的标题, 从中提取关键词
+  chrome.tabs.sendMessage(fissionActiveTab, {action:'enrichBatch',asins:[seed]}, function(r){
+    if(r && r.success && r.products && r.products[0]){
+      var d=r.products[0];
+      if(d.title) fsProducts.push(d);
+      var kws=extractKeywords(d);
+      fsKws=kws;
+    } else {
+      fsKws=[seed];
+    }
+    setTimeout(expandLoop, 300);
+  });
 
   function extractKeywords(p){
-    var t=(p.title||'').toLowerCase();var b=(p.brand||'').toLowerCase().replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();
-    var w=t.split(/[\s\/\-]+/).filter(function(w){return w.length>4&&!/^\d/.test(w);});
-    if(b&&b.length>2&&b!=='generic')w.unshift(b);
-    var s={},u=[];w.forEach(function(x){if(!s[x]){s[x]=true;u.push(x);}});
+    var t=(p.title||'').toLowerCase();
+    var b=(p.brand||'').toLowerCase().replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();
+    var w=t.split(/[\s\/\-]+/).filter(function(x){return x.length>4&&!/^\d/.test(x);});
+    if(b&&b.length>2&&b!=='generic') w.unshift(b);
+    var s={},u=[];
+    w.forEach(function(x){if(!s[x]){s[x]=true;u.push(x);}});
     return u;
   }
 
@@ -101,11 +117,10 @@ function startFission(seed, target, filters, sender){
     if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
     if(fsConsecutive++>20){finishFission();return;}
 
-    // 取下一个关键词
     if(fsKi>=fsKws.length){fsKi=0;}
     var kw=fsKws[fsKi++];
     if(!kw||fsUsedKws[kw]){setTimeout(expandLoop,200);return;}
-    fsUsedKws[kw]=true;fsConsecutive=0;
+    fsUsedKws[kw]=true; fsConsecutive=0;
 
     var url='https://www.amazon.com/s?k='+encodeURIComponent(kw);
     notifyPopup({type:'fission-progress',phase:'search',msg:'搜索: '+kw+' | '+fsProducts.length+'/'+fsTarget,pct:10+Math.round(fsProducts.length/fsTarget*20)});
@@ -116,12 +131,17 @@ function startFission(seed, target, filters, sender){
       fresh.forEach(function(a){fsSeenASIN[a]=true;});
       if(!fresh.length){fsConsecutive++;setTimeout(expandLoop,800);return;}
 
-      var batch=Math.min(fresh.length,fsTarget-fsProducts.length+20);
+      // enrichBatch: content.js 一次性批量抓详情
+      var batch=Math.min(fresh.length, fsTarget-fsProducts.length+20);
       chrome.tabs.sendMessage(fissionActiveTab,{action:'enrichBatch',asins:fresh.slice(0,batch)},function(result){
+        if(!fsRunning) return;
         if(result&&result.success&&result.products){
           result.products.forEach(function(d){if(d&&d.title){fsProducts.push(d);fsConsecutive=0;}});
         }
-        fsProducts.slice(-5).forEach(function(p){extractKeywords(p).forEach(function(w){if(!fsUsedKws[w]){fsKws.push(w);}});});
+        // 从新商品提取关键词
+        fsProducts.slice(-5).forEach(function(p){
+          extractKeywords(p).forEach(function(w){if(!fsUsedKws[w]){fsKws.push(w);}});
+        });
         notifyPopup({type:'fission-progress',phase:'detail',msg:'已抓 '+fsProducts.length+'/'+fsTarget,pct:10+Math.round(Math.min(fsProducts.length/fsTarget,0.99)*88)});
         setTimeout(expandLoop,300);
       });
@@ -129,62 +149,84 @@ function startFission(seed, target, filters, sender){
   }
 
   function finishFission(){
-    if(!fsRunning)return;clearTimeout(fsWatchdog);
+    if(!fsRunning) return;
+    clearTimeout(fsWatchdog);
     fsProducts.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();});
-    notifyPopup({type:'fission-done',products:fsProducts,msg:'裂变完成: '+fsProducts.length});
+    notifyPopup({type:'fission-done',products:fsProducts,msg:'裂变完成: '+fsProducts.length+' 个商品'});
     fsRunning=false;
   }
 }
 
 var startFissionSeller = startFission;
 
-function notifyPopup(data) {
-  try { chrome.runtime.sendMessage(data); } catch(e) { /* popup closed, no listener */ }
-}
+// ============================================================
+// 类目导出: 分批 enrichBatch, 每批完成后发进度
+// ============================================================
 
-// === 类目导出 (后台运行, 不中断) ===
 function startExport(count, sender) {
   if (exportRunning) return;
-  exportRunning = true; exportProducts = []; exportTotal = count; exportDone = 0;
+  exportRunning = true; exportProducts = []; exportTotal = count;
 
   chrome.tabs.sendMessage(exportTab, { action: 'scrape' }, function(r) {
-    if (!r || !r.success) { notifyPopup({ type: 'export-progress', msg: 'Failed to scrape', done: 0, total: 0, pct: 0 }); exportRunning = false; return; }
+    if (!r || !r.success) { notifyPopup({ type: 'export-done', products: [], msg: 'Scrape failed' }); exportRunning = false; return; }
     var prods = (r.products || []).slice(0, Math.min(count, r.products.length));
     exportTotal = prods.length;
     if (!exportTotal) { notifyPopup({ type: 'export-done', products: [], msg: '0 products found' }); exportRunning = false; return; }
     notifyPopup({ type: 'export-progress', msg: 'Got ' + exportTotal + '. Enriching...', done: 0, total: exportTotal, pct: 5 });
 
-    // enrichBatch: content.js 一次性批量抓取所有 ASIN 详情, 不依赖后台多次 sendMessage 往返
-    var asins = prods.map(function(p) { return p.asin; });
-    chrome.tabs.sendMessage(exportTab, { action: 'enrichBatch', asins: asins }, function(result) {
-      if (!result || !result.success) {
-        // fallback: 返回浅层数据
-        exportProducts = prods.map(function(p) { return { asin: p.asin, title: p.title||'', brand: p.brand||'', link: 'https://www.amazon.com/dp/'+p.asin, image: p.image_url||'', price: p.price_usd||'', rating: p.rating||'', reviews: p.review_count||0, shipping: p._shipping||'' }; });
-      } else {
-        exportProducts = (result.products || []).map(function(d, i) {
-          return {
-            asin: d.asin || prods[i].asin, title: d.title || prods[i].title || '',
-            brand: d.brand || prods[i].brand || '', link: 'https://www.amazon.com/dp/' + (d.asin || prods[i].asin),
-            image: d.image || prods[i].image_url || '', price: d.price || prods[i].price_usd || '',
-            rating: d.rating || prods[i].rating || '', reviews: d.reviews || prods[i].review_count || 0,
-            shipping: d.shipping || prods[i]._shipping || '',
-            weight: d.weight || '', dims: d.dims || '',
-            bsr: d.bsr || ((prods[i].bsr || [])[0] ? ((prods[i].bsr || [])[0].rank || '') : ''),
-            monthly: d.monthly || prods[i].monthly || ''
-          };
-        });
+    // 分批 enrichBatch: 每批 5 个 ASIN, 每批完成后发进度
+    var batches = [];
+    for (var i = 0; i < prods.length; i += 5) batches.push(prods.slice(i, Math.min(i + 5, prods.length)));
+
+    function runBatch(bi) {
+      if (!exportRunning || bi >= batches.length) {
+        notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
+        exportRunning = false; return;
       }
-      notifyPopup({ type: 'export-done', products: exportProducts, msg: 'Done! ' + exportProducts.length + ' products' });
-      exportRunning = false;
-    });
+      var batch = batches[bi];
+      var asins = batch.map(function(p) { return p.asin; });
+      var pct = 5 + Math.round(bi / batches.length * 90);
+      notifyPopup({ type: 'export-progress', msg: 'Enrich batch ' + (bi+1) + '/' + batches.length, done: exportProducts.length, total: exportTotal, pct: pct });
+
+      chrome.tabs.sendMessage(exportTab, { action: 'enrichBatch', asins: asins }, function(result) {
+        if (!exportRunning) return;
+        if (result && result.success && result.products) {
+          result.products.forEach(function(d, j) {
+            var p = batch[j];
+            exportProducts.push({
+              asin: d.asin || p.asin, title: d.title || p.title || '',
+              brand: d.brand || p.brand || '', link: 'https://www.amazon.com/dp/' + (d.asin || p.asin),
+              image: d.image || p.image_url || '', price: d.price || p.price_usd || '',
+              rating: d.rating || p.rating || '', reviews: d.reviews || p.review_count || 0,
+              shipping: d.shipping || p._shipping || '',
+              weight: d.weight || '', dims: d.dims || '',
+              bsr: d.bsr || ((p.bsr || [])[0] ? ((p.bsr || [])[0].rank || '') : ''),
+              monthly: d.monthly || p.monthly || ''
+            });
+          });
+        } else {
+          // fallback: shallow data
+          batch.forEach(function(p) {
+            exportProducts.push({ asin: p.asin, title: p.title||'', brand: p.brand||'', link: 'https://www.amazon.com/dp/'+p.asin, image: p.image_url||'', price: p.price_usd||'', rating: p.rating||'', reviews: p.review_count||0 });
+          });
+        }
+        var pct2 = 5 + Math.round((bi+1) / batches.length * 90);
+        notifyPopup({ type: 'export-progress', msg: 'Enriched ' + exportProducts.length + '/' + exportTotal, done: exportProducts.length, total: exportTotal, pct: pct2 });
+        setTimeout(function() { runBatch(bi + 1); }, 300);
+      });
+    }
+    runBatch(0);
   });
 }
+
+// ============================================================
+// 公共工具
+// ============================================================
 
 function exA(h) {
   var a = [], seen = {};
   var re = /data-asin="([A-Z0-9]{10})"/g, m;
   while ((m = re.exec(h)) !== null) { if (!seen[m[1]]) { seen[m[1]] = true; a.push(m[1]); } }
-  // Fallback: /dp/ URLs for store pages (no data-asin attributes)
   if (a.length < 3) {
     var re2 = /\/dp\/([A-Z0-9]{10})/g;
     while ((m = re2.exec(h)) !== null) { if (!seen[m[1]]) { seen[m[1]] = true; a.push(m[1]); } }
@@ -226,18 +268,6 @@ function checkTrademarksBatch(brands, callback) {
   });
 }
 
-// PRD: WIPO 国家筛选 — 获取品牌注册国家列表
-function checkTrademarkCountries(brand, callback) {
-  var cleanBrand = brand.toLowerCase().trim();
-  getUSPTO(cleanBrand, function(r) {
-    var c = r.countries || [];
-    if (!r.registered) { tryWIPO(cleanBrand, function(wr) { callback({registered:wr.registered,countries:(wr.countries||[]),sources:['uspto','wipo']}); }); }
-    else { callback({registered:1,countries:c,sources:['uspto']}); }
-  });
-}
-
-// A: 在 USPTO/WIPO 查询结果中已包含 countries 字段, see getUSPTO/tryWIPO
-
 function getUSPTO(brand, callback) {
   var cleanBrand = brand.toLowerCase().trim();
   fetch('https://tsdr.uspto.gov/tsdr/api/v1/search?q=' + encodeURIComponent(cleanBrand) + '&pageSize=10&page=0', { headers: { 'Accept': 'application/json' } })
@@ -253,10 +283,9 @@ function getUSPTO(brand, callback) {
       var st = (match.status || match.statusCode || '').toLowerCase();
       callback({ registered: (/live|registered|published for opposition|notice of allowance|approved/.test(st)) ? 1 : 0, source: 'uspto', name: match.markVerbalElementText || match.name || '', regNum: match.registrationNumber || match.serialNumber || '', status: match.status || '', total: results.length, exactMatch: !!exact });
     })
-    .catch(function(err) { tryWIPO(cleanBrand, callback); });
+    .catch(function() { tryWIPO(cleanBrand, callback); });
 }
 
-// WIPO Global Brand Database fallback (覆盖非美国注册)
 function tryWIPO(cleanBrand, callback) {
   fetch('https://api.branddb.wipo.int/api/v2/brand/search?q=' + encodeURIComponent(cleanBrand) + '&size=5', { headers: { 'Accept': 'application/json' } })
     .then(function(resp) { if (!resp.ok) throw new Error('HTTP ' + resp.status); return resp.json(); })
