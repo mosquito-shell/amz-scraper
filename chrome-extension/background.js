@@ -43,8 +43,8 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   if (request.action === 'getFissionState') {
     sendResponse({
       running: fsRunning || fissionRunning,
+      done: fsRunning,
       enriched: fsProducts,
-      done: fsProducts.length,
       total: fsTarget,
       queueSize: fsKws.length
     });

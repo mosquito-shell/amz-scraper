@@ -445,8 +445,8 @@ chrome.runtime.onMessage.addListener(function(msg){
   if(msg.type==='fission-progress'){
     var st2=document.getElementById('fs-status');
     if(st2){st2.style.display='block';st2.textContent=msg.msg;st2.className='status-bar';}
-    var pb=document.getElementById('fs-progress');if(pb)pb.style.display='block';
-    var fill=document.querySelector('#fs-progress .fill');if(fill)fill.style.width=(msg.pct||0)+'%';
+    var pb=document.getElementById('fs-progress');
+    if(pb){pb.style.display='block';pb.innerHTML='<div class="bar"><div class="fill" style="width:'+(msg.pct||0)+'%"></div></div>';}
   }
   if(msg.type==='fission-done'){
     var fsProds=msg.products||[];
@@ -499,13 +499,23 @@ document.addEventListener('DOMContentLoaded',function(){
       var exBtn=document.getElementById('ex-start');if(exBtn){exBtn.disabled=true;exBtn.textContent=state.done+'/'+state.total;}
     }
   });
-  // Recover fission state
+  // Recover fission state (running OR completed-but-not-displayed)
   chrome.runtime.sendMessage({action:'getFissionState'},function(state){
-    if(state&&state.running){
+    if(!state) return;
+    if(state.running){
       document.getElementById('fs-status').style.display='block';
-      document.getElementById('fs-status').textContent='Resuming... '+state.enriched.length+' found';
+      document.getElementById('fs-status').textContent='运行中... '+state.enriched.length+'/'+state.total;
       document.getElementById('fs-progress').style.display='block';
       document.getElementById('fs-create').textContent='运行中...';
+      fissionRunning=true;
+    } else if(state.enriched && state.enriched.length>0){
+      // fission done but popup missed fission-done message → render now
+      var fsProds=state.enriched;
+      fsProds.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);});
+      var added=mergeProducts(fsProducts,fsProds);
+      rWB(fsProducts,'fs-wb-table','fs-wb-count','fs');
+      var st2=document.getElementById('fs-status');
+      if(st2){st2.style.display='block';st2.textContent='恢复完成: '+fsProducts.length+' 件商品';st2.className='status-bar';}
     }
   });
 });
