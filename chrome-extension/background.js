@@ -42,8 +42,7 @@ chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
   }
   if (request.action === 'getFissionState') {
     sendResponse({
-      running: fsRunning || fissionRunning,
-      done: fsRunning,
+      running: fsRunning,
       enriched: fsProducts,
       total: fsTarget,
       queueSize: fsKws.length
@@ -114,8 +113,9 @@ function startFission(seed, target, filters, sender){
   }
 
   function expandLoop(){
-    if(!fsRunning||fsProducts.length>=fsTarget){finishFission();return;}
-    if(fsConsecutive++>20){finishFission();return;}
+    if(!fsRunning){return;}
+    if(fsProducts.length>=fsTarget){finishFission();return;}
+    if(fsProducts.length>0 && fsConsecutive>20){finishFission();return;}
 
     if(fsKi>=fsKws.length){fsKi=0;}
     var kw=fsKws[fsKi++];

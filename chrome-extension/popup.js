@@ -449,34 +449,39 @@ chrome.runtime.onMessage.addListener(function(msg){
     if(pb){pb.style.display='block';pb.innerHTML='<div class="bar"><div class="fill" style="width:'+(msg.pct||0)+'%"></div></div>';}
   }
   if(msg.type==='fission-done'){
-    var fsProds=msg.products||[];
-    fsProds.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);if(p.stock!==undefined&&p.stock)logStock(p.asin,p.stock);});
-    var tmEl=document.querySelector('input[name="fs-tm"]:checked');var tmVal=tmEl?tmEl.value:'all';
-    var salesMin=parseInt(document.getElementById('fs-sales-min').value)||0;
-    var salesMaxV=parseInt(document.getElementById('fs-sales-max').value)||0;
-    var filterOfficial=document.getElementById('fs-official').checked;
-    var bestsellerOnly=document.getElementById('fs-bestseller').checked;
-    var shipCbs=document.querySelectorAll('input[name="fs-ship"]:checked');var shipFilters=[];
-    shipCbs.forEach(function(cb){shipFilters.push(cb.value);});
-    var sellerMin=parseInt(document.getElementById('fs-seller-min').value)||0;
-    var filtered=fsProds.filter(function(p){
-      if(filterOfficial&&/^amazon/i.test(p.brand||''))return false;
-      if(shipFilters.length&&shipFilters.indexOf(p.shipping||'')<0)return false;
-      var ms=parseInt(p.monthly)||0;if(salesMin>0&&ms<salesMin)return false;if(salesMaxV>0&&ms>salesMaxV)return false;
-      if(tmVal==='yes'&&tm(p.brand)!=='1')return false;if(tmVal==='no'&&tm(p.brand)!=='0')return false;
-      if(bestsellerOnly&&!(p.bs||0))return false;
-      if(sellerMin>0&&(p._sellerCount||0)<sellerMin)return false;return true;
-    });
-    filtered.sort(function(a,b){return(b.score||0)-(a.score||0)});
-    fsProducts=filtered; // 每次裂变搜索替换，不累加
-    sDL('fs-download',filtered,'fission');rWB(fsProducts,'fs-wb-table','fs-wb-count','fs');
-    var st=document.getElementById('fs-status');if(st)st.textContent='完成: '+filtered.length+' 件商品';
-    var pb2=document.getElementById('fs-progress');if(pb2)pb2.style.display='none';
-    var fsBtn=document.getElementById('fs-create');if(fsBtn){fsBtn.textContent='创建并开始';fsBtn.disabled=false;}
-    fissionRunning=false;
-    setTimeout(function(){checkTrademarks(fsProducts,'fs');},300);
+    handleFissionDone(msg.products||[]);
   }
 });
+
+// Shared handler for fission-done (used by both message listener and recovery)
+function handleFissionDone(rawProds){
+  var fsProds=rawProds||[];
+  fsProds.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);if(p.stock!==undefined&&p.stock)logStock(p.asin,p.stock);});
+  var tmEl=document.querySelector('input[name="fs-tm"]:checked');var tmVal=tmEl?tmEl.value:'all';
+  var salesMin=parseInt(document.getElementById('fs-sales-min').value)||0;
+  var salesMaxV=parseInt(document.getElementById('fs-sales-max').value)||0;
+  var filterOfficial=document.getElementById('fs-official').checked;
+  var bestsellerOnly=document.getElementById('fs-bestseller').checked;
+  var shipCbs=document.querySelectorAll('input[name="fs-ship"]:checked');var shipFilters=[];
+  shipCbs.forEach(function(cb){shipFilters.push(cb.value);});
+  var sellerMin=parseInt(document.getElementById('fs-seller-min').value)||0;
+  var filtered=fsProds.filter(function(p){
+    if(filterOfficial&&/^amazon/i.test(p.brand||''))return false;
+    if(shipFilters.length&&shipFilters.indexOf(p.shipping||'')<0)return false;
+    var ms=parseInt(p.monthly)||0;if(salesMin>0&&ms<salesMin)return false;if(salesMaxV>0&&ms>salesMaxV)return false;
+    if(tmVal==='yes'&&tm(p.brand)!=='1')return false;if(tmVal==='no'&&tm(p.brand)!=='0')return false;
+    if(bestsellerOnly&&!(p.bs||0))return false;
+    if(sellerMin>0&&(p._sellerCount||0)<sellerMin)return false;return true;
+  });
+  filtered.sort(function(a,b){return(b.score||0)-(a.score||0)});
+  fsProducts=filtered;
+  sDL('fs-download',filtered,'fission');rWB(fsProducts,'fs-wb-table','fs-wb-count','fs');
+  var st=document.getElementById('fs-status');if(st){st.style.display='block';st.textContent='完成: '+filtered.length+' 件商品';st.className='status-bar';}
+  var pb2=document.getElementById('fs-progress');if(pb2)pb2.style.display='none';
+  var fsBtn=document.getElementById('fs-create');if(fsBtn){fsBtn.textContent='创建并开始';fsBtn.disabled=false;}
+  fissionRunning=false;
+  setTimeout(function(){checkTrademarks(fsProducts,'fs');},300);
+}
 document.getElementById('ex-start').addEventListener('click',function(){
   var bt=this,st=document.getElementById('ex-status'),dl2=document.getElementById('ex-download');
   if(!activeTabId){st.style.display='block';st.textContent='No Amazon tab';st.className='status-bar error';return;}
@@ -499,7 +504,7 @@ document.addEventListener('DOMContentLoaded',function(){
       var exBtn=document.getElementById('ex-start');if(exBtn){exBtn.disabled=true;exBtn.textContent=state.done+'/'+state.total;}
     }
   });
-  // Recover fission state (running OR completed-but-not-displayed)
+  // Recover fission state
   chrome.runtime.sendMessage({action:'getFissionState'},function(state){
     if(!state) return;
     if(state.running){
@@ -509,14 +514,8 @@ document.addEventListener('DOMContentLoaded',function(){
       document.getElementById('fs-create').textContent='运行中...';
       fissionRunning=true;
     } else if(state.enriched && state.enriched.length>0){
-      // fission done but popup missed fission-done message → replace (not merge)
-      fsProducts=state.enriched;
-      fsProducts.forEach(function(p){p.brand=(p.brand||'').replace(/List:|bought in past month|Amazon.{0,20}Choice|Overall Pick/gi,'').trim();sc(p);});
-      fsProducts.sort(function(a,b){return(b.score||0)-(a.score||0);});
-      rWB(fsProducts,'fs-wb-table','fs-wb-count','fs');
-      sDL('fs-download',fsProducts,'fission');
-      var st2=document.getElementById('fs-status');
-      if(st2){st2.style.display='block';st2.textContent='恢复完成: '+fsProducts.length+' 件商品';st2.className='status-bar';}
+      // fission done while popup was closed — apply same filters as fission-done handler
+      handleFissionDone(state.enriched);
     }
   });
 });
