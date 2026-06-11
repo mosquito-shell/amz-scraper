@@ -1,5 +1,5 @@
-# proxyIP.txt - Auto-accumulated 2026-06-11T12:26:58.223968
-# Total valid IPs: 233
+# proxyIP.txt - Auto-accumulated 2026-06-11T19:16:40.754081
+# Total valid IPs: 234
 # Format: IP:PORT#source
 
 104.16.70.0:443#scan
@@ -234,4 +234,5 @@
 39.102.213.50:8443#verified
 8.130.71.75:3128#verified
 8.215.12.103:80#verified
+121.43.109.88:80#verified
 8.211.51.115:8443#verified-http
