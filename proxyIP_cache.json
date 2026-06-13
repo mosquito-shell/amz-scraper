@@ -1,6 +1,6 @@
 {
-  "updated": "2026-06-12T22:04:20.173371",
-  "total": 235,
+  "updated": "2026-06-13T04:56:25.507130",
+  "total": 236,
   "ips": [
     {
       "ip": "104.16.70.0",
@@ -1411,6 +1411,12 @@
       "port": 8443,
       "source": "verified-http",
       "latency": 9641
+    },
+    {
+      "ip": "4.221.164.109",
+      "port": 443,
+      "source": "verified-http",
+      "latency": 12184
     }
   ]
 }
