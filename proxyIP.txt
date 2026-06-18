@@ -1,4 +1,4 @@
-# proxyIP.txt - Auto-accumulated 2026-06-18T18:39:30.507328
+# proxyIP.txt - Auto-accumulated 2026-06-18T22:28:30.868103
 # Total valid IPs: 249
 # Format: IP:PORT#source
 
