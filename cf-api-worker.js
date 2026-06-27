@@ -76,21 +76,21 @@ async function handleRequest(request, env) {
 
     // ===== Learn History API =====
     if (path === '/api/learn-history' && method === 'GET') {
-      const data = await env.AMZ_DATA.get('weights_history', 'json') || [];
+      const data = await env.AMZ_DATA.get('learn_history', 'json') || [];
       response = json(data);
       return cors(request, response);
     }
 
     if (path === '/api/learn-history' && method === 'POST') {
       const body = await request.json();
-      const existing = await env.AMZ_DATA.get('weights_history', 'json') || [];
+      const existing = await env.AMZ_DATA.get('learn_history', 'json') || [];
       if (Array.isArray(body)) {
         existing.push(...body);
       } else {
         existing.push(body);
       }
       const trimmed = existing.slice(-100);
-      await env.AMZ_DATA.put('weights_history', JSON.stringify(trimmed));
+      await env.AMZ_DATA.put('learn_history', JSON.stringify(trimmed));
       response = json({ ok: true, count: trimmed.length });
       return cors(request, response);
     }
@@ -253,22 +253,12 @@ async function handleRequest(request, env) {
 
     if (path === '/api/ip-pool' && method === 'POST') {
       const body = await request.json();
-      const existing = await env.AMZ_DATA.get('ip_pool', 'json') || { ips: [], total: 0 };
-      // Merge new IPs, deduplicate
-      const seen = {};
-      existing.ips.forEach(function(ip) { seen[ip.ip+':'+ip.port] = true; });
-      let added = 0;
-      (body.ips || []).forEach(function(ip) {
-        var key = ip.ip+':'+ip.port;
-        if (!seen[key]) { seen[key] = true; existing.ips.push(ip); added++; }
-      });
-      existing.total = existing.ips.length;
-      existing.updated = body.updated || new Date().toISOString();
-      // Cap at 1000
-      if (existing.ips.length > 1000) existing.ips = existing.ips.slice(-1000);
-      existing.total = existing.ips.length;
-      await env.AMZ_DATA.put('ip_pool', JSON.stringify(existing));
-      response = json({ ok: true, total: existing.total, added: added });
+      // Full replace — scanner always sends the complete authoritative list
+      body.total = (body.ips || []).length;
+      body.updated = body.updated || new Date().toISOString();
+      if (body.total > 1000) body.ips = body.ips.slice(0, 1000);
+      await env.AMZ_DATA.put('ip_pool', JSON.stringify(body));
+      response = json({ ok: true, total: body.total, replaced: true });
       return cors(request, response);
     }
 
@@ -407,5 +397,31 @@ async function handleRequest(request, env) {
 export default {
   async fetch(request, env, ctx) {
     return handleRequest(request, env);
+  },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil((async () => {
+      try {
+        const products = await env.AMZ_DATA.get('products', 'json') || [];
+        const weights = await env.AMZ_DATA.get('weights', 'json') || {};
+        const snapshots = await env.AMZ_DATA.get('daily_snapshots', 'json') || [];
+        const snap = {
+          date: new Date().toISOString().slice(0, 10),
+          time: new Date().toISOString(),
+          productCount: Array.isArray(products) ? products.length : 0,
+          weights: weights,
+          highScore: Array.isArray(products) ? products.filter(function(p){ return (p.score || p._score || 0) >= 70; }).length : 0,
+          avgScore: Array.isArray(products) && products.length
+            ? Math.round(products.reduce(function(s, p){ return s + (p.score || p._score || 0); }, 0) / products.length * 10) / 10
+            : 0
+        };
+        var existing = snapshots.filter(function(s){ return s.date !== snap.date; });
+        existing.push(snap);
+        if (existing.length > 90) existing = existing.slice(-90);
+        await env.AMZ_DATA.put('daily_snapshots', JSON.stringify(existing));
+        await env.AMZ_DATA.put('last_daily_snapshot', JSON.stringify(snap));
+      } catch (err) {
+        console.log('scheduled snapshot failed', err && err.message ? err.message : err);
+      }
+    })());
   }
 };
