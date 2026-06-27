@@ -1,61 +1,7 @@
 {
-  "updated": "2026-06-27T04:30:20.016952",
-  "total": 273,
+  "updated": "2026-06-27T17:25:30.598868",
+  "total": 98,
   "ips": [
-    {
-      "ip": "104.16.70.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.97.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.82.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.180.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "162.159.195.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "198.41.194.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.81.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.96.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.94.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
     {
       "ip": "47.82.151.111",
       "port": 3128,
@@ -65,42 +11,6 @@
     {
       "ip": "47.82.151.27",
       "port": 3128,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.134.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.62.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.131.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.104.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.253.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.13.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -117,86 +27,14 @@
       "latency": 0
     },
     {
-      "ip": "104.24.194.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.3.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.98.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.101.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "47.82.152.108",
       "port": 3128,
       "source": "scan",
       "latency": 0
     },
     {
-      "ip": "104.18.227.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.65.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.71.31",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.199.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.12.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.14.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.217.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "47.82.151.36",
       "port": 3128,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.194.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -213,31 +51,7 @@
       "latency": 0
     },
     {
-      "ip": "104.27.48.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.191.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "203.32.120.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.89.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.171.0",
       "port": 443,
       "source": "scan",
       "latency": 0
@@ -249,56 +63,8 @@
       "latency": 0
     },
     {
-      "ip": "104.17.2.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "162.159.243.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.107.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.64.20.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.56.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.32.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "47.82.178.12",
       "port": 3128,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.122.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.48.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -315,49 +81,7 @@
       "latency": 0
     },
     {
-      "ip": "104.17.80.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.224.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.64.89.52",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.145.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.200.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.57.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "147.185.161.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "162.159.40.0",
       "port": 443,
       "source": "scan",
       "latency": 0
@@ -369,85 +93,13 @@
       "latency": 0
     },
     {
-      "ip": "104.16.253.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.92.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "23.227.60.245",
       "port": 80,
       "source": "scan",
       "latency": 0
     },
     {
-      "ip": "104.18.131.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.100.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.0.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "103.21.244.126",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.82.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "162.159.143.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "103.21.244.152",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.157.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.31.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "195.85.23.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.35.0",
       "port": 443,
       "source": "scan",
       "latency": 0
@@ -459,86 +111,8 @@
       "latency": 0
     },
     {
-      "ip": "104.25.16.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "162.159.242.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.61.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.67.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "45.131.6.230",
       "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.155.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.108.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "103.21.244.164",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.21.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.197.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "198.41.195.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.140.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.7.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.173.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -549,20 +123,8 @@
       "latency": 0
     },
     {
-      "ip": "104.19.210.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "45.131.7.90",
       "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.218.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -573,20 +135,8 @@
       "latency": 0
     },
     {
-      "ip": "172.67.243.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "46.47.197.210",
       "port": 3128,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.119.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -597,134 +147,14 @@
       "latency": 0
     },
     {
-      "ip": "104.27.17.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "31.133.0.150",
       "port": 2053,
       "source": "scan",
       "latency": 0
     },
     {
-      "ip": "104.16.252.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.45.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.153.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.49.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.216.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.30.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.68.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "162.159.25.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.4.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.39.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.158.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.72.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.207.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "2.27.50.150",
       "port": 8080,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.236.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.249.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.213.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.43.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "190.93.247.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.205.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -747,74 +177,8 @@
       "latency": 0
     },
     {
-      "ip": "141.101.121.174",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "141.101.121.0",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.67.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.1.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.73.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.33.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.9.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.70.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.31.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.160.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "103.213.97.78",
       "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.243.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -831,36 +195,6 @@
       "latency": 0
     },
     {
-      "ip": "172.67.255.21",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.240.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "103.21.244.195",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.216.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.57.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "103.253.43.144",
       "port": 80,
       "source": "scan",
@@ -873,121 +207,13 @@
       "latency": 0
     },
     {
-      "ip": "172.67.89.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.178.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.104.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.136.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.229.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.229.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.66.46.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.10.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.115.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.181.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "162.159.9.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "141.101.122.141",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.8.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.196.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.24.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "164.38.155.7",
       "port": 80,
       "source": "scan",
       "latency": 0
     },
     {
-      "ip": "104.17.13.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "159.112.235.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.156.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.46.0",
       "port": 443,
       "source": "scan",
       "latency": 0
@@ -999,62 +225,8 @@
       "latency": 0
     },
     {
-      "ip": "104.19.1.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "198.41.219.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.246.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "172.200.72.48",
       "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.179.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.51.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.153.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.135.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.30.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.25.70.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -1065,73 +237,13 @@
       "latency": 0
     },
     {
-      "ip": "104.19.231.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "155.212.164.117",
       "port": 3128,
       "source": "scan",
       "latency": 0
     },
     {
-      "ip": "104.21.82.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.192.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.218.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.48.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "196.13.241.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.79.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.180.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.27.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.238.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.123.0",
       "port": 443,
       "source": "scan",
       "latency": 0
@@ -1143,25 +255,7 @@
       "latency": 0
     },
     {
-      "ip": "172.64.80.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "91.193.58.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "188.114.97.16",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.4.0",
       "port": 443,
       "source": "scan",
       "latency": 0
@@ -1173,128 +267,8 @@
       "latency": 0
     },
     {
-      "ip": "104.25.95.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.18.234.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "188.114.97.197",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.125.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.53.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "141.193.213.105",
       "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.64.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.85.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.16.76.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.86.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.115.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.197.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "172.67.150.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "188.114.98.88",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.55.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "103.21.244.28",
-      "port": 80,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.24.21.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.27.29.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.19.168.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.17.97.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.20.27.0",
-      "port": 443,
       "source": "scan",
       "latency": 0
     },
@@ -1305,37 +279,13 @@
       "latency": 0
     },
     {
-      "ip": "104.16.160.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.214.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "194.36.49.0",
       "port": 443,
       "source": "scan",
       "latency": 0
     },
     {
-      "ip": "172.67.117.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
       "ip": "45.131.210.0",
-      "port": 443,
-      "source": "scan",
-      "latency": 0
-    },
-    {
-      "ip": "104.21.72.0",
       "port": 443,
       "source": "scan",
       "latency": 0
