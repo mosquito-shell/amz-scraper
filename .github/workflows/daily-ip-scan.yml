@@ -19,6 +19,9 @@ jobs:
       - name: Install deps
         run: pip install requests urllib3
 
+      - name: Purge CF CDN IPs from cache
+        run: python3 ip_scanner.py --purge-cf
+
       - name: Scan IPs
         run: python3 ip_scanner.py --full --max 80
 
@@ -32,6 +35,15 @@ jobs:
 
       - name: Sync to backend API
         run: |
-          curl -s -X POST https://api.tsscjn.top/api/ip-pool \
+          python3 - <<'PY'
+          import json, pathlib, sys
+          p = pathlib.Path('proxyIP_cache.json')
+          if not p.exists():
+              print('proxyIP_cache.json missing', file=sys.stderr)
+              sys.exit(1)
+          data = json.loads(p.read_text(encoding='utf-8'))
+          print('ips', len(data.get('ips', [])))
+          PY
+          curl -sSf -X POST https://api.tsscjn.top/api/ip-pool \
             -H 'Content-Type: application/json' \
-            -d @proxyIP_cache.json
+            --data-binary @proxyIP_cache.json

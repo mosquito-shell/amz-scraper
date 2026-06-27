@@ -30,13 +30,29 @@ CF_IP_RANGES = [
     ("108.162.192.", "108.162.207."), ("131.0.72.", "131.0.75."), ("141.101.64.", "141.101.127."),
     ("162.158.", "162.159."), ("172.64.", "172.71."), ("173.245.48.", "173.245.63."),
     ("188.114.96.", "188.114.111."), ("190.93.240.", "190.93.255."), ("197.234.240.", "197.234.255."),
-    ("198.41.128.", "198.41."), ("199.27.128.", "199.27."),
+    ("198.41.128.0", "198.41.255.255"), ("199.27.128.0", "199.27.255.255"),
 ]
 
+def _ip_to_tuple(ip, pad=0):
+    """将 IPv4 地址转为整数元组，不足 4 字节用 pad 补齐"""
+    parts = [int(p) for p in ip.rstrip('.').split('.') if p]
+    while len(parts) < 4:
+        parts.append(pad)
+    return tuple(parts)
+
+
 def _is_cf_ip(ip):
-    """判断是否 Cloudflare CDN IP (不能做代理)"""
+    """判断是否 Cloudflare CDN IP (不能做代理)，使用整数元组精确比较"""
+    try:
+        ip_t = tuple(int(p) for p in ip.strip().split('.')[:4])
+        if len(ip_t) != 4:
+            return False
+    except (ValueError, IndexError):
+        return False
     for lo, hi in CF_IP_RANGES:
-        if lo <= ip <= hi:
+        lo_t = _ip_to_tuple(lo, pad=0)
+        hi_t = _ip_to_tuple(hi, pad=255)
+        if lo_t <= ip_t <= hi_t:
             return True
     return False
 
@@ -210,7 +226,18 @@ def scan_all_sources():
         except Exception as e:
             print(f"错误: {e}")
 
-    return list(all_ips), cf_ips
+    # 过滤掉 CF CDN IP — 这些是边缘节点，无法代理 HTTP 流量
+    filtered_ips = set()
+    cf_filtered_count = 0
+    for ip_str in all_ips:
+        ip_only = ip_str.split(':')[0] if ':' in ip_str else ip_str
+        if _is_cf_ip(ip_only):
+            cf_filtered_count += 1
+        else:
+            filtered_ips.add(ip_str)
+    if cf_filtered_count:
+        print(f"  [过滤] 移除 {cf_filtered_count} 个 CF CDN IP (非代理)")
+    return list(filtered_ips), cf_ips
 
 
 def validate_ip(ip, port=443, timeout=8):
@@ -410,6 +437,63 @@ def save_results(valid_ips, accumulate=True):
     return OUTPUT_FILE, added, len(merged)
 
 
+def purge_cf_from_cache():
+    """清理 proxyIP_cache.json 和 proxyIP.txt 中的 Cloudflare CDN IP"""
+    removed = 0
+    if not os.path.exists(CACHE_FILE):
+        print("  [清理] 缓存文件不存在，跳过")
+        return removed
+
+    try:
+        with open(CACHE_FILE, "r", encoding="utf-8") as f:
+            cache = json.load(f)
+    except Exception as e:
+        print(f"  [清理] 读取缓存失败: {e}")
+        return removed
+
+    ips = cache.get("ips", [])
+    if not ips:
+        print("  [清理] 缓存为空，跳过")
+        return removed
+
+    clean_ips = []
+    for entry in ips:
+        entry_ip = entry.get("ip", "")
+        if not entry_ip:
+            clean_ips.append(entry)
+            continue
+        try:
+            if _is_cf_ip(entry_ip):
+                removed += 1
+            else:
+                clean_ips.append(entry)
+        except Exception:
+            clean_ips.append(entry)
+
+    if removed == 0:
+        print("  [清理] 缓存中无 CF CDN IP，跳过")
+        return 0
+
+    print(f"  [清理] 从缓存移除 {removed} 个 CF CDN IP (非代理), 剩余 {len(clean_ips)}")
+
+    # 重写缓存 JSON
+    cache["ips"] = clean_ips[:1000]
+    cache["total"] = len(clean_ips)
+    cache["updated"] = datetime.now().isoformat()
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(cache, f, indent=2, ensure_ascii=False)
+
+    # 重写 proxyIP.txt
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        f.write(f"# proxyIP.txt - Auto-accumulated (purged CF CDN IPs) {datetime.now().isoformat()}\n")
+        f.write(f"# Total valid IPs: {len(clean_ips)}\n")
+        f.write(f"# Format: IP:PORT#source\n\n")
+        for entry in clean_ips:
+            f.write(f"{entry['ip']}:{entry['port']}#{entry.get('source', 'scan')}\n")
+
+    return removed
+
+
 def load_cache():
     """读取缓存的 IP 列表"""
     if os.path.exists(CACHE_FILE):
@@ -426,6 +510,9 @@ def run_full_scan(max_validate=50, accumulate=True):
     print("=" * 60)
     print("  Cloudflare IP 池自动扫描系统")
     print("=" * 60)
+
+    # 0. 清理缓存中的历史 CF CDN IP
+    purge_cf_from_cache()
 
     # 1. 收集
     all_ips, cf_ips = scan_all_sources()
@@ -498,6 +585,7 @@ if __name__ == "__main__":
     parser.add_argument("--loop", action="store_true", help="7×24 持续扫描模式")
     parser.add_argument("--interval", type=int, default=60, help="loop 模式间隔(分钟)")
     parser.add_argument("--serve", action="store_true", help="启动简单 Web API")
+    parser.add_argument("--purge-cf", action="store_true", help="清理缓存中的 Cloudflare CDN IP")
 
     args = parser.parse_args()
 
@@ -506,6 +594,15 @@ if __name__ == "__main__":
         print(f"缓存 IP: {cache['total']} 个 (更新于 {cache['updated']})")
         for i, ip in enumerate(cache["ips"][:20]):
             print(f"  {i+1}. {ip['ip']}:{ip['port']}")
+
+    elif args.purge_cf:
+        removed = purge_cf_from_cache()
+        if removed > 0:
+            print(f"清理完成: 移除 {removed} 个 Cloudflare CDN IP")
+            cache = load_cache()
+            print(f"当前缓存: {cache['total']} 个 IP")
+        else:
+            print("缓存中无 Cloudflare CDN IP，无需清理")
 
     elif args.serve:
         from http.server import HTTPServer, BaseHTTPRequestHandler
