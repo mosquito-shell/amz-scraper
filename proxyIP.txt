@@ -1,4 +1,4 @@
-# proxyIP.txt - Auto-accumulated (purged CF CDN IPs) 2026-06-27T17:25:30.599862
+# proxyIP.txt - Auto-accumulated 2026-06-27T10:31:45.121242
 # Total valid IPs: 98
 # Format: IP:PORT#source
 
