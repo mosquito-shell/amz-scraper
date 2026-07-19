@@ -1,6 +1,6 @@
 {
-  "updated": "2026-07-18T21:12:14.514245",
-  "total": 203,
+  "updated": "2026-07-19T04:03:59.547949",
+  "total": 206,
   "ips": [
     {
       "ip": "47.82.151.111",
@@ -513,6 +513,12 @@
       "latency": 5341
     },
     {
+      "ip": "8.211.194.85",
+      "port": 443,
+      "source": "verified",
+      "latency": 5359
+    },
+    {
       "ip": "8.211.49.86",
       "port": 8443,
       "source": "verified",
@@ -529,6 +535,12 @@
       "port": 80,
       "source": "verified",
       "latency": 5376
+    },
+    {
+      "ip": "8.209.96.245",
+      "port": 8443,
+      "source": "verified",
+      "latency": 5389
     },
     {
       "ip": "8.211.51.115",
@@ -577,6 +589,12 @@
       "port": 8080,
       "source": "verified",
       "latency": 5413
+    },
+    {
+      "ip": "47.91.29.151",
+      "port": 8443,
+      "source": "verified",
+      "latency": 5417
     },
     {
       "ip": "8.211.200.183",
