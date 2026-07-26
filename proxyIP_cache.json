@@ -1,6 +1,6 @@
 {
-  "updated": "2026-07-26T17:31:25.930925",
-  "total": 234,
+  "updated": "2026-07-26T21:17:40.052883",
+  "total": 236,
   "ips": [
     {
       "ip": "47.82.151.111",
@@ -295,6 +295,12 @@
       "port": 80,
       "source": "verified-http",
       "latency": 261
+    },
+    {
+      "ip": "3.211.120.181",
+      "port": 443,
+      "source": "verified-http",
+      "latency": 463
     },
     {
       "ip": "50.205.246.13",
@@ -661,6 +667,12 @@
       "port": 3128,
       "source": "verified",
       "latency": 5435
+    },
+    {
+      "ip": "47.238.60.156",
+      "port": 80,
+      "source": "verified",
+      "latency": 5446
     },
     {
       "ip": "47.238.128.246",
